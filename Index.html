@@ -1,1 +1,2384 @@
-x
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1116">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>TCG Scanner Pro</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#0e1116;--panel:#171b22;--panel-2:#1f242d;--border:#2a313c;
+    --text:#e6e9ef;--muted:#8b93a3;--accent:#6c8cff;--accent-2:#b06cff;
+    --green:#4ade80;--red:#f87171;--yellow:#fbbf24;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+    --tabbar-h:64px;
+  }
+  html,body{height:100%;overflow-x:hidden}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    background:var(--bg);color:var(--text);
+    padding-bottom:calc(var(--tabbar-h) + var(--safe-bottom) + 16px);
+    padding-top:var(--safe-top);
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y:none;
+  }
+  input,select,textarea,button{font-family:inherit;font-size:16px}
+
+  /* === HEADER === */
+  .app-header{
+    position:sticky;top:0;z-index:50;
+    background:rgba(14,17,22,.92);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+    padding:12px 16px;padding-top:calc(12px + var(--safe-top));
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+  }
+  .app-header h1{
+    font-size:1.05rem;font-weight:800;letter-spacing:-.3px;
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .header-stats{display:flex;gap:8px;flex-shrink:0}
+  .header-stat{background:var(--panel);border:1px solid var(--border);padding:5px 10px;border-radius:10px;text-align:center}
+  .header-stat .v{font-size:.85rem;font-weight:800;color:var(--accent);line-height:1.1}
+  .header-stat .l{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+  .header-stat .d{font-size:.6rem;font-weight:700;margin-top:1px}
+  .header-stat .d.up{color:var(--green)}.header-stat .d.down{color:var(--red)}
+
+  /* === VIEWS === */
+  .view{display:none;padding:14px;animation:fade .25s ease-out}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* === TABBAR === */
+  .tabbar{
+    position:fixed;bottom:0;left:0;right:0;z-index:100;
+    background:rgba(23,27,34,.96);
+    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border-top:1px solid var(--border);
+    padding-bottom:var(--safe-bottom);
+    display:flex;height:calc(var(--tabbar-h) + var(--safe-bottom));
+  }
+  .tab{
+    flex:1;background:transparent;border:none;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;font-size:.65rem;font-weight:700;letter-spacing:.2px;
+    cursor:pointer;transition:color .15s;padding:6px 4px;position:relative;
+  }
+  .tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .tab.active{color:var(--accent)}
+  .tab.active::before{
+    content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:28px;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    border-radius:0 0 3px 3px;
+  }
+
+  /* === PANELS === */
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px}
+  .panel-title{
+    font-size:.72rem;text-transform:uppercase;letter-spacing:1.1px;
+    color:var(--muted);font-weight:800;margin-bottom:12px;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+  .panel-title .btn-icon{background:transparent;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:4px;line-height:1}
+
+  /* === BUTTONS === */
+  .btn{
+    padding:13px 18px;border-radius:12px;border:none;cursor:pointer;
+    font-weight:700;font-size:.95rem;transition:transform .1s,background .15s;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    white-space:nowrap;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff}
+  .btn-ghost{background:var(--panel-2);color:var(--text);border:1px solid var(--border)}
+  .btn-danger{background:rgba(248,113,113,.15);color:var(--red);border:1px solid rgba(248,113,113,.3)}
+  .btn-success{background:rgba(74,222,128,.15);color:var(--green);border:1px solid rgba(74,222,128,.3)}
+  .btn-block{display:flex;width:100%}
+  .btn-sm{padding:9px 14px;font-size:.85rem;border-radius:10px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn:disabled:active{transform:none}
+
+  /* === INPUTS === */
+  label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:6px;font-weight:800}
+  input[type=text],input[type=number],input[type=password],select,textarea{
+    width:100%;padding:14px;background:var(--panel-2);
+    border:1px solid var(--border);border-radius:12px;
+    color:var(--text);font-size:16px;
+    -webkit-appearance:none;appearance:none;
+    transition:border-color .15s;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  select{
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b93a3' stroke-width='3' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat;background-position:right 14px center;
+    padding-right:38px;
+  }
+  textarea{resize:vertical;min-height:70px}
+  .fg{margin-bottom:12px}
+  .fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  /* === DROPZONE === */
+  .dropzone{
+    border:2px dashed var(--border);border-radius:16px;
+    padding:28px 16px;text-align:center;cursor:pointer;
+    background:var(--panel-2);transition:border-color .15s;
+  }
+  .dropzone:active{border-color:var(--accent)}
+  .dropzone svg{width:48px;height:48px;stroke:var(--muted);margin-bottom:10px}
+  .dropzone .big{font-size:.95rem;font-weight:700;margin-bottom:4px}
+  .dropzone .sm{font-size:.75rem;color:var(--muted);margin-bottom:16px}
+
+  /* === GAME PICKER === */
+  .game-bar{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;-webkit-overflow-scrolling:touch}
+  .game-bar::-webkit-scrollbar{display:none}
+  .game-chip{
+    flex-shrink:0;padding:9px 14px;border-radius:11px;
+    background:var(--panel-2);border:1px solid var(--border);
+    color:var(--muted);font-weight:700;font-size:.82rem;
+    cursor:pointer;transition:all .15s;white-space:nowrap;
+  }
+  .game-chip.active{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border-color:transparent}
+
+  /* === PREVIEW === */
+  #previewWrap{position:relative;display:none;margin-top:12px}
+  #preview{width:100%;border-radius:14px;display:block;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  #scanOverlay{
+    position:absolute;inset:0;border-radius:14px;
+    background:linear-gradient(180deg,transparent 0%,rgba(108,140,255,.25) 50%,transparent 100%);
+    background-size:100% 200%;pointer-events:none;display:none;
+  }
+  #previewWrap.scanning #scanOverlay{display:block;animation:scanline 1.2s ease-in-out infinite}
+  @keyframes scanline{0%{background-position:0 -100%}100%{background-position:0 100%}}
+
+  /* === SCAN STEPS === */
+  .scan-step{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:.82rem;color:var(--muted);transition:color .2s}
+  .scan-step.active{color:var(--text)}
+  .scan-step.done{color:var(--green)}
+  .scan-step.error{color:var(--red)}
+  .step-dot{width:10px;height:10px;border-radius:50%;background:var(--border);flex-shrink:0;position:relative;transition:background .2s}
+  .scan-step.active .step-dot{background:var(--accent);animation:pulse 1s infinite}
+  .scan-step.done .step-dot{background:var(--green)}
+  .scan-step.error .step-dot{background:var(--red)}
+  .scan-step.active .step-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--accent);opacity:.4;animation:ping 1.2s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+  @keyframes ping{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.8);opacity:0}}
+
+  /* === CANDIDATES === */
+  .candidate-btn{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 14px;background:var(--panel-2);
+    border:1px solid var(--border);border-radius:12px;
+    color:var(--text);cursor:pointer;text-align:left;
+    width:100%;font-size:.9rem;font-weight:600;
+    transition:border-color .15s;
+  }
+  .candidate-btn:active{border-color:var(--accent);background:#1c2436}
+  .candidate-btn.best{border-color:var(--green);background:rgba(74,222,128,.06)}
+  .candidate-btn .conf{margin-left:auto;font-size:.72rem;font-weight:800;color:var(--green);white-space:nowrap}
+  .candidate-btn .rank{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;flex-shrink:0}
+  .candidate-btn.best .rank{background:var(--green);color:#000}
+
+  /* === CONFIDENCE === */
+  .confidence{background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;font-size:.85rem}
+  .confidence .bar{height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden}
+  .confidence .fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));transition:width .5s}
+  .ocr-text{font-family:ui-monospace,monospace;font-size:.75rem;background:var(--panel-2);border:1px dashed var(--border);border-radius:10px;padding:10px;margin-top:6px;color:var(--muted);max-height:90px;overflow-y:auto;white-space:pre-wrap}
+
+  /* === RESULTS === */
+  .results-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .result-item{
+    display:grid;grid-template-columns:52px 1fr auto;gap:10px;
+    padding:10px;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:12px;cursor:pointer;align-items:center;
+  }
+  .result-item:active{border-color:var(--accent);background:#1c2436}
+  .result-item img,.result-item .ph{width:52px;height:73px;object-fit:cover;border-radius:8px;background:#111}
+  .result-item .ph{display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:var(--muted)}
+  .result-item .title{font-weight:700;font-size:.85rem;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .result-item .sub{font-size:.7rem;color:var(--muted);line-height:1.35}
+  .result-item .price-tag{font-size:.8rem;color:var(--green);font-weight:800;text-align:right;white-space:nowrap}
+  .badge{display:inline-block;padding:2px 6px;border-radius:5px;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+  .b-mtg{background:rgba(249,115,22,.2);color:#fb923c}
+  .b-ygo{background:rgba(139,92,246,.2);color:#a78bfa}
+  .b-pkmn{background:rgba(251,191,36,.2);color:#fbbf24}
+
+  /* === COLLECTION === */
+  .coll-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  @media(min-width:520px){.coll-grid{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:760px){.coll-grid{grid-template-columns:repeat(4,1fr)}}
+  .card-tile{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;position:relative;transition:transform .1s}
+  .card-tile:active{transform:scale(.97);border-color:var(--accent)}
+  .card-thumb{width:100%;aspect-ratio:5/7;object-fit:cover;background:var(--panel-2);display:block}
+  .card-thumb-ph{width:100%;aspect-ratio:5/7;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#232a36,#1a1f28);color:var(--muted);font-size:2.4rem}
+  .rarity-pill{position:absolute;top:6px;right:6px;padding:3px 7px;border-radius:6px;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#fff;backdrop-filter:blur(8px)}
+  .psa-pill{position:absolute;top:6px;left:6px;padding:3px 7px;border-radius:6px;font-size:.58rem;font-weight:800;background:var(--green);color:#000}
+  .card-tile-info{padding:8px 10px}
+  .card-tile-info .n{font-weight:700;font-size:.8rem;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .card-tile-info .m{font-size:.65rem;color:var(--muted);display:flex;justify-content:space-between;gap:4px}
+  .card-tile-info .p-row{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px}
+  .card-tile-info .p{color:var(--green);font-weight:800;font-size:.8rem}
+  .card-tile-info .d{font-size:.65rem;font-weight:800}
+  .card-tile-info .d.up{color:var(--green)}.card-tile-info .d.down{color:var(--red)}
+
+  /* === FILTERS === */
+  .filter-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+  .filter-chips::-webkit-scrollbar{display:none}
+  .filter-chip{flex-shrink:0;padding:7px 12px;border-radius:9px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted);font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap}
+  .filter-chip.active{background:var(--accent);color:#fff;border-color:transparent}
+
+  /* === MODALS === */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;z-index:200;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:flex-end}
+  .modal-bg.show{display:flex;animation:fade .2s ease-out}
+  .modal{
+    background:var(--panel);border-radius:20px 20px 0 0;width:100%;max-height:92vh;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;border-top:1px solid var(--border);
+    padding-bottom:var(--safe-bottom);animation:slideUp .25s ease-out;
+  }
+  @media(min-width:640px){.modal-bg{align-items:center;justify-content:center;padding:20px}.modal{border-radius:20px;max-width:640px;max-height:88vh}}
+  @keyframes slideUp{from{transform:translateY(30px)}to{transform:translateY(0)}}
+  .modal-header{position:sticky;top:0;z-index:10;background:var(--panel);padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .modal-header h3{font-size:1.05rem;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal-close{background:var(--panel-2);border:1px solid var(--border);color:var(--text);width:36px;height:36px;border-radius:50%;font-size:1.2rem;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .modal-body{padding:16px}
+  .modal-img-full{background:var(--panel-2);display:flex;align-items:center;justify-content:center;padding:16px;border-radius:14px;margin-bottom:16px;min-height:180px}
+  .modal-img-full img{max-width:100%;max-height:52vh;border-radius:12px}
+  .modal-img-full .ph{font-size:3.5rem;color:var(--muted)}
+
+  /* === DETAILS === */
+  .detail-list{background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:4px 14px;margin-bottom:14px}
+  .detail-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:.85rem;gap:10px}
+  .detail-row:last-child{border-bottom:none}
+  .detail-row .k{color:var(--muted);flex-shrink:0}
+  .detail-row .v{font-weight:700;text-align:right;word-break:break-word}
+
+  /* === PSA BOX === */
+  .psa-box{background:linear-gradient(135deg,rgba(74,222,128,.08),rgba(108,140,255,.08));border:1px solid rgba(74,222,128,.4);border-radius:14px;padding:14px;margin-bottom:14px}
+  .psa-box .psa-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px}
+  .psa-box .psa-top .lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:800}
+  .psa-grade-pill{background:var(--green);color:#000;padding:3px 10px;border-radius:8px;font-weight:800;font-size:.8rem}
+
+  /* === PRICE / SPARKLINE === */
+  .price-box{background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+  .price-box .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:8px}
+  .price-box .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:800}
+  .price-box .cur{font-size:1.15rem;font-weight:800;color:var(--green)}
+  .price-box .dlg{font-size:.82rem;font-weight:800}
+  .price-box .dlg.up{color:var(--green)}.price-box .dlg.down{color:var(--red)}
+  .spark{width:100%;height:56px;display:block;margin-top:6px}
+  .hist-list{font-size:.75rem;max-height:110px;overflow-y:auto;margin-top:8px}
+  .hist-list .r{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);color:var(--muted)}
+  .hist-list .r:last-child{border:none}
+
+  /* === MISC === */
+  .toast{position:fixed;bottom:calc(var(--tabbar-h) + var(--safe-bottom) + 14px);left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:12px 18px;border-radius:12px;z-index:300;transition:transform .3s;font-weight:700;font-size:.85rem;max-width:calc(100vw - 40px);text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  .toast.success{border-color:var(--green);color:var(--green)}
+  .toast.error{border-color:var(--red);color:var(--red)}
+  .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .empty{text-align:center;padding:50px 20px;color:var(--muted)}
+  .empty svg{width:56px;height:56px;stroke:var(--muted);opacity:.4;margin-bottom:14px}
+  .empty p{font-size:.9rem;line-height:1.5}
+  .progress{height:6px;background:var(--border);border-radius:3px;overflow:hidden;display:none;margin-top:12px}
+  .progress.show{display:block}
+  .progress .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%;transition:width .3s}
+  .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .status-dot.ok{background:var(--green)}.status-dot.bad{background:var(--red)}.status-dot.warn{background:var(--yellow)}
+  .csv-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;max-height:260px;-webkit-overflow-scrolling:touch}
+  .csv-table{width:100%;border-collapse:collapse;font-size:.72rem;min-width:500px}
+  .csv-table th,.csv-table td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+  .csv-table th{background:var(--panel-2);color:var(--muted);font-weight:800;text-transform:uppercase;font-size:.62rem;letter-spacing:.4px;position:sticky;top:0;z-index:1}
+  .hint{font-size:.72rem;color:var(--muted);line-height:1.5;margin-top:6px}
+  .link{color:var(--accent);text-decoration:none;font-weight:700}
+  .row-between{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .row-flex{display:flex;gap:8px}
+  .row-flex > *{flex:1;min-width:0}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>🎴 TCG Scanner Pro</h1>
+  <div class="header-stats">
+    <div class="header-stat"><div class="v" id="statCount">0</div><div class="l">Karten</div></div>
+    <div class="header-stat"><div class="v" id="statValue">0€</div><div class="l">Wert</div><div class="d" id="statDelta"></div></div>
+  </div>
+</header>
+
+<!-- ========== SCAN ========== -->
+<section class="view active" id="view-scan">
+  <div class="panel">
+    <div class="panel-title">Spiel wählen</div>
+    <div class="game-bar" id="gameSelScan">
+      <button class="game-chip active" data-game="mtg">🔮 Magic</button>
+      <button class="game-chip" data-game="ygo">🎴 Yu-Gi-Oh!</button>
+      <button class="game-chip" data-game="pkmn">⚡ Pokémon</button>
+      <button class="game-chip" data-game="manual">✏️ Manuell</button>
+    </div>
+
+    <div id="dropzone" class="dropzone">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      <div class="big">Karte fotografieren</div>
+      <div class="sm">Kamera oder Galerie</div>
+      <button class="btn btn-primary btn-block" id="camBtn">📸 Kamera öffnen</button>
+      <button class="btn btn-ghost btn-block" id="fileBtn" style="margin-top:8px;">🖼️ Aus Galerie</button>
+    </div>
+
+    <div id="previewWrap">
+      <div style="position:relative;">
+        <img id="preview" alt="">
+        <div id="scanOverlay"></div>
+        <canvas id="cardDetectOverlay" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none;"></canvas>
+      </div>
+
+      <div id="scanProgress" style="display:none;margin-top:12px;">
+        <div class="scan-step" data-step="detect"><span class="step-dot"></span><span>Karte erkennen</span></div>
+        <div class="scan-step" data-step="preprocess"><span class="step-dot"></span><span>Bild optimieren</span></div>
+        <div class="scan-step" data-step="ocr"><span class="step-dot"></span><span>Text erkennen (OCR)</span></div>
+        <div class="scan-step" data-step="search"><span class="step-dot"></span><span>Datenbank durchsuchen</span></div>
+      </div>
+
+      <div class="row-flex" style="margin-top:12px;">
+        <button class="btn btn-ghost" id="resetBtn">↺ Neu</button>
+        <button class="btn btn-primary" id="analyzeBtn">🔍 Analysieren</button>
+      </div>
+    </div>
+
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <input type="file" id="camInput" accept="image/*" capture="environment" style="display:none">
+  </div>
+
+  <div class="panel" id="candidatesPanel" style="display:none;">
+    <div class="panel-title"><span>🎯 Namen-Kandidaten</span><span style="font-size:.65rem;opacity:.7;text-transform:none;letter-spacing:0;">Tippe den richtigen an</span></div>
+    <div id="candidateList" class="stack"></div>
+    <button class="btn btn-ghost btn-block btn-sm" id="manualNameBtn" style="margin-top:10px;">✏️ Anderen Namen eingeben</button>
+  </div>
+
+  <div class="panel" id="resultsPanel" style="display:none;">
+    <div class="panel-title"><span>Analyse</span><button class="btn-icon" id="toggleAnalysis">▾</button></div>
+    <div id="analysisCollapse">
+      <div id="analysisResult"></div>
+      <div id="ocrWrap" style="display:none;margin-top:12px;">
+        <label>Erkannter Text (Rohtext)</label>
+        <div class="ocr-text" id="ocrText"></div>
+      </div>
+    </div>
+    <div id="apiResultsWrap" style="display:none;margin-top:14px;">
+      <label>Treffer in Datenbank</label>
+      <div class="results-list" id="apiResults"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SEARCH ========== -->
+<section class="view" id="view-search">
+  <div class="panel">
+    <div class="panel-title">Datenbank-Suche</div>
+    <div class="game-bar" id="gameSelSearch">
+      <button class="game-chip active" data-game="mtg">🔮 Magic</button>
+      <button class="game-chip" data-game="ygo">🎴 Yu-Gi-Oh!</button>
+      <button class="game-chip" data-game="pkmn">⚡ Pokémon</button>
+    </div>
+    <div class="row-flex">
+      <input type="text" id="searchQuery" placeholder="Kartenname..." autocomplete="off" autocorrect="off">
+      <button class="btn btn-primary" id="searchBtn" style="flex:0 0 auto;">🔎</button>
+    </div>
+    <div id="searchResultsWrap" style="display:none;margin-top:14px;">
+      <div class="results-list" id="searchResults"></div>
+    </div>
+    <div id="searchEmpty" class="empty" style="padding:30px 10px;"><p>💡 Kartenname eingeben und suchen</p></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title"><span>API-Status</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;">
+      <span><span class="status-dot" id="statusDotMtg"></span>Scryfall</span>
+      <span><span class="status-dot" id="statusDotYgo"></span>YGOPRODeck</span>
+      <span><span class="status-dot" id="statusDotPkmn"></span>Pokémon</span>
+      <span><span class="status-dot" id="statusDotPsa"></span>PSA</span>
+    </div>
+  </div>
+</section>
+
+<!-- ========== COLLECTION ========== -->
+<section class="view" id="view-collection">
+  <div class="panel">
+    <div class="row-flex">
+      <input type="text" id="searchInput" placeholder="🔍 Suchen..." autocomplete="off">
+      <select id="sortBy" style="flex:0 0 auto;width:auto;">
+        <option value="added_desc">Neu</option>
+        <option value="name_asc">A-Z</option>
+        <option value="price_desc">€↓</option>
+        <option value="price_asc">€↑</option>
+        <option value="change_desc">Δ↓</option>
+      </select>
+    </div>
+    <div class="filter-chips" style="margin-top:12px;">
+      <button class="filter-chip active" data-filter-type="game" data-value="">Alle Spiele</button>
+      <button class="filter-chip" data-filter-type="game" data-value="mtg">Magic</button>
+      <button class="filter-chip" data-filter-type="game" data-value="ygo">YGO</button>
+      <button class="filter-chip" data-filter-type="game" data-value="pkmn">Pokémon</button>
+      <button class="filter-chip" data-filter-type="game" data-value="manual">Andere</button>
+    </div>
+    <div class="filter-chips">
+      <button class="filter-chip active" data-filter-type="rarity" data-value="">Alle Raritäten</button>
+      <button class="filter-chip" data-filter-type="rarity" data-value="Common">Common</button>
+      <button class="filter-chip" data-filter-type="rarity" data-value="Rare">Rare</button>
+      <button class="filter-chip" data-filter-type="rarity" data-value="Holo">Holo</button>
+      <button class="filter-chip" data-filter-type="rarity" data-value="Ultra Rare">Ultra</button>
+      <button class="filter-chip" data-filter-type="rarity" data-value="Secret Rare">Secret</button>
+    </div>
+  </div>
+
+  <div id="collectionGrid" class="coll-grid"></div>
+  <div id="emptyState" class="empty" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    <p>Noch keine Karten</p>
+    <p style="font-size:.78rem;margin-top:6px;opacity:.7;">Scanne deine erste Karte!</p>
+  </div>
+</section>
+
+<!-- ========== CSV ========== -->
+<section class="view" id="view-csv">
+  <div class="panel">
+    <div class="panel-title">📥 CSV Import</div>
+    <div id="csvDrop" class="dropzone" style="min-height:auto;padding:24px 16px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" style="width:40px;height:40px;">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <div class="big">CSV-Datei wählen</div>
+      <div class="sm">Oder Beispiel herunterladen</div>
+      <button class="btn btn-primary btn-block" id="csvPickBtn">📁 CSV auswählen</button>
+      <button class="btn btn-ghost btn-block" id="csvSampleBtn" style="margin-top:8px;">📋 Beispiel-CSV</button>
+    </div>
+    <input type="file" id="csvInput" accept=".csv,text/csv" style="display:none">
+
+    <div id="csvMappingWrap" style="display:none;margin-top:16px;">
+      <label style="margin-bottom:8px;">Spalten-Zuordnung</label>
+      <div id="csvMapGrid"></div>
+      <div class="hint" style="margin:12px 0;">
+        <strong id="csvRowCount">0</strong> Zeilen · Trennzeichen: <strong id="csvDelim">,</strong> · <strong id="csvColCount">0</strong> Spalten
+      </div>
+      <label style="margin-top:12px;">Vorschau</label>
+      <div class="csv-table-wrap"><div id="csvPreviewWrap"></div></div>
+      <button class="btn btn-primary btn-block" id="csvImportBtn" style="margin-top:12px;">✅ Alle importieren</button>
+      <button class="btn btn-ghost btn-block" id="csvCancelBtn" style="margin-top:8px;">✕ Abbrechen</button>
+      <div class="progress" id="csvProgress"><div class="fill"></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">📤 CSV Export</div>
+    <button class="btn btn-primary btn-block" id="csvExportBtn">⬇️ Sammlung exportieren</button>
+    <button class="btn btn-ghost btn-block" id="csvExportHistoryBtn" style="margin-top:8px;">📊 Preisverlauf exportieren</button>
+  </div>
+</section>
+
+<!-- ========== DATA ========== -->
+<section class="view" id="view-data">
+  <div class="panel">
+    <div class="panel-title">🔐 PSA API (Cert Verification)</div>
+    <p class="hint" style="margin-bottom:12px;">
+      Kostenlos auf <a class="link" href="https://www.psacard.com/publicapi" target="_blank" rel="noopener">psacard.com/publicapi</a> registrieren und Token generieren. Free Tier: 100 Calls/Tag.
+    </p>
+    <div class="fg"><input type="password" id="psaApiToken" placeholder="PSA Bearer Token" autocomplete="off" autocorrect="off"></div>
+    <div class="row-flex">
+      <button class="btn btn-primary btn-sm" id="savePsaTokenBtn">💾 Speichern</button>
+      <button class="btn btn-ghost btn-sm" id="testPsaTokenBtn">🔍 Testen</button>
+    </div>
+    <p class="hint" style="margin-top:10px;">Token wird nur lokal auf diesem Gerät gespeichert.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">💾 Backup</div>
+    <div class="stack">
+      <button class="btn btn-primary btn-block" id="exportBtn">⬇️ JSON Backup</button>
+      <button class="btn btn-ghost btn-block" id="importBtn">⬆️ JSON importieren</button>
+      <button class="btn btn-ghost btn-block" id="refreshPricesBtn">🔄 Preise aktualisieren</button>
+      <button class="btn btn-danger btn-block" id="clearAllBtn">🗑️ Sammlung löschen</button>
+    </div>
+    <input type="file" id="importInput" accept=".json" style="display:none">
+    <div class="progress" id="refreshProgress"><div class="fill"></div></div>
+    <p id="refreshStatus" class="hint" style="display:none;margin-top:8px;"></p>
+  </div>
+
+  <div class="panel"><div class="panel-title">📈 Top-Steigerungen</div><div id="topGainers"></div></div>
+  <div class="panel"><div class="panel-title">📊 Seltenheiten</div><div id="rarityStats"></div></div>
+  <div class="panel"><div class="panel-title">🎮 Nach Spiel</div><div id="gameStats"></div></div>
+</section>
+
+<!-- ========== TABBAR ========== -->
+<nav class="tabbar">
+  <button class="tab active" data-view="scan">
+    <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    <span>Scan</span>
+  </button>
+  <button class="tab" data-view="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span>Suche</span>
+  </button>
+  <button class="tab" data-view="collection">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    <span>Sammlung</span>
+  </button>
+  <button class="tab" data-view="csv">
+    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <span>CSV</span>
+  </button>
+  <button class="tab" data-view="data">
+    <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    <span>Daten</span>
+  </button>
+</nav>
+
+<!-- ========== FORM MODAL ========== -->
+<div class="modal-bg" id="formModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="formModalTitle">Karte hinzufügen</h3>
+      <button class="modal-close" onclick="closeFormModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="cardForm">
+        <div class="fg"><label>Name *</label><input type="text" id="f_name" required autocomplete="off"></div>
+        <div class="fg-row">
+          <div class="fg"><label>Set</label><input type="text" id="f_set" autocomplete="off"></div>
+          <div class="fg"><label>Nummer</label><input type="text" id="f_number" autocomplete="off"></div>
+        </div>
+        <div class="fg-row">
+          <div class="fg"><label>Seltenheit</label>
+            <select id="f_rarity">
+              <option>Common</option><option>Uncommon</option><option>Rare</option>
+              <option>Holo</option><option>Ultra Rare</option><option>Secret Rare</option><option>Promo</option>
+            </select>
+          </div>
+          <div class="fg"><label>Zustand</label>
+            <select id="f_condition">
+              <option>Mint</option><option selected>Near Mint</option><option>Excellent</option>
+              <option>Good</option><option>Played</option><option>Poor</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg-row">
+          <div class="fg"><label>Sprache</label>
+            <select id="f_lang">
+              <option value="DE">DE</option><option value="EN">EN</option>
+              <option value="JP">JP</option><option value="FR">FR</option><option value="IT">IT</option>
+            </select>
+          </div>
+          <div class="fg"><label>Spiel</label>
+            <select id="f_game">
+              <option value="mtg">Magic</option><option value="ygo">Yu-Gi-Oh!</option>
+              <option value="pkmn">Pokémon</option><option value="manual">Andere</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg-row">
+          <div class="fg"><label>Wert (€)</label><input type="number" id="f_price" step="0.01" min="0" inputmode="decimal"></div>
+          <div class="fg"><label>Anzahl</label><input type="number" id="f_qty" value="1" min="1" inputmode="numeric"></div>
+        </div>
+
+        <div class="fg" style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--panel-2);border-radius:12px;border:1px solid var(--border);">
+          <input type="checkbox" id="f_is_graded" style="width:22px;height:22px;accent-color:var(--accent);">
+          <label for="f_is_graded" style="margin:0;text-transform:none;font-size:.9rem;letter-spacing:0;color:var(--text);">PSA-gegradet</label>
+        </div>
+
+        <div id="psaFieldWrap" style="display:none;">
+          <div class="fg">
+            <label>PSA Cert-Nummer</label>
+            <div class="row-flex">
+              <input type="text" id="f_psa_cert" placeholder="z.B. 29023160" inputmode="numeric" autocomplete="off">
+              <button type="button" class="btn btn-primary btn-sm" id="psaLookupBtn" style="flex:0 0 auto;">🔍</button>
+            </div>
+          </div>
+          <div id="psaResult"></div>
+        </div>
+
+        <div class="fg"><label>Notizen</label><textarea id="f_notes" rows="2"></textarea></div>
+        <button type="submit" class="btn btn-primary btn-block">💾 Zur Sammlung</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ========== DETAIL MODAL ========== -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalName">—</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-img-full" id="modalImgWrap"><div class="ph">🎴</div></div>
+      <div id="modalSet" style="color:var(--muted);font-size:.85rem;margin-bottom:12px;"></div>
+      <div id="modalPsaBox"></div>
+      <div id="modalPriceBox"></div>
+      <div id="modalDetails" class="detail-list"></div>
+      <div class="stack">
+        <button class="btn btn-primary btn-block" id="modalRefresh">🔄 Preis aktualisieren</button>
+        <button class="btn btn-ghost btn-block" id="modalEdit">✏️ Bearbeiten</button>
+        <button class="btn btn-danger btn-block" id="modalDelete">🗑️ Löschen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const STORAGE_KEY = 'tcg_collection_v4';
+const PSA_KEY_STORAGE = 'tcg_psa_token';
+const PKMN_KEY_STORAGE = 'tcg_pkmn_apikey';
+let collection = [];
+let currentImage = null;
+let currentGame = 'mtg';
+let searchGame = 'mtg';
+let currentCardId = null;
+let pendingCardData = null;
+let pendingPsaData = null;
+let editingCardId = null;
+let ocrWorker = null;
+let csvData = null;
+let csvMapping = {};
+let filterGame = '';
+let filterRarity = '';
+
+// ============================================================
+// HELPERS
+// ============================================================
+const $ = id => document.getElementById(id);
+const escapeHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmtEUR = n => (Number(n) || 0).toFixed(2) + ' €';
+const fmtShort = n => { const v = Number(n) || 0; if (v >= 1000) return (v/1000).toFixed(1).replace(/\.0$/,'') + 'k€'; return v.toFixed(0) + '€'; };
+const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'}); } catch { return '—'; } };
+
+function parsePrice(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (!v) return 0;
+  let s = String(v).trim().replace(/[€$£\s]/g, '');
+  if (!s) return 0;
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^\d+,\d+$/.test(s)) s = s.replace(',', '.');
+  else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, '');
+  else s = s.replace(/,/g, '');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+function toast(msg, type = '') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = 'toast ' + type, 3000);
+}
+
+function imgTag(src, cls, alt = '') {
+  const phCls = cls.replace('card-thumb','card-thumb-ph');
+  if (!src) return `<div class="${phCls}">🎴</div>`;
+  return `<img class="${cls}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML='<div class=\\'${phCls}\\'>🎴</div>'">`;
+}
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function load() {
+  try {
+    collection = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    if (!Array.isArray(collection)) collection = [];
+    collection.forEach(c => {
+      if (!Array.isArray(c.priceHistory)) c.priceHistory = c.price > 0 ? [{t:c.added||new Date().toISOString(),p:c.price}] : [];
+      if (!c.game) c.game = c.api || 'manual';
+      if (c.price == null) c.price = 0;
+      if (!c.qty || c.qty < 1) c.qty = 1;
+      if (c.isGraded == null) c.isGraded = false;
+    });
+  } catch (e) { console.error(e); collection = []; }
+}
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collection)); updateStats(); }
+  catch (e) {
+    console.error(e);
+    toast(e.name === 'QuotaExceededError' ? 'Speicher voll! Backup erstellen.' : 'Speichern fehlgeschlagen', 'error');
+  }
+}
+
+// ============================================================
+// TABS
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    tab.classList.add('active');
+    $('view-' + tab.dataset.view).classList.add('active');
+    window.scrollTo({top:0,behavior:'smooth'});
+    if (tab.dataset.view === 'collection') renderCollection();
+    if (tab.dataset.view === 'data') { renderRarityStats(); renderGameStats(); renderTopGainers(); }
+  };
+});
+
+// ============================================================
+// GAME SELECTORS
+// ============================================================
+function bindGameSel(id, cb) {
+  document.querySelectorAll(`#${id} .game-chip`).forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(`#${id} .game-chip`).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      cb(btn.dataset.game);
+    };
+  });
+}
+bindGameSel('gameSelScan', g => currentGame = g);
+bindGameSel('gameSelSearch', g => searchGame = g);
+
+// ============================================================
+// FILE / CAMERA
+// ============================================================
+$('camBtn').onclick = () => $('camInput').click();
+$('fileBtn').onclick = () => $('fileInput').click();
+$('fileInput').onchange = e => e.target.files[0] && handleFile(e.target.files[0]);
+$('camInput').onchange = e => e.target.files[0] && handleFile(e.target.files[0]);
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) { toast('Nur Bilder erlaubt', 'error'); return; }
+  if (file.size > 10 * 1024 * 1024) { toast('Max 10 MB', 'error'); return; }
+  const r = new FileReader();
+  r.onerror = () => toast('Datei lesen fehlgeschlagen', 'error');
+  r.onload = ev => {
+    currentImage = ev.target.result;
+    $('preview').src = currentImage;
+    $('dropzone').style.display = 'none';
+    $('previewWrap').style.display = 'block';
+  };
+  r.readAsDataURL(file);
+}
+
+$('resetBtn').onclick = () => {
+  currentImage = null;
+  $('preview').src = '';
+  $('previewWrap').style.display = 'none';
+  $('dropzone').style.display = 'block';
+  $('resultsPanel').style.display = 'none';
+  $('candidatesPanel').style.display = 'none';
+  $('scanProgress').style.display = 'none';
+  $('cardDetectOverlay').style.display = 'none';
+  $('analysisResult').innerHTML = '';
+  $('ocrWrap').style.display = 'none';
+  $('apiResultsWrap').style.display = 'none';
+  $('fileInput').value = ''; $('camInput').value = '';
+  resetScanSteps();
+};
+
+// ============================================================
+// IMAGE ANALYSIS
+// ============================================================
+function analyzeImage(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onerror = () => resolve({avgColor:{hex:'#000',name:'—'},brightness:0,contrast:0,orientation:'—',confidence:0,resolution:'—'});
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = 100;
+        c.height = Math.max(1, Math.round(100 * img.height / img.width));
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        const data = ctx.getImageData(0, 0, c.width, c.height).data;
+        let r=0,g=0,b=0,n=0,minL=255,maxL=0,sumL=0;
+        for (let i=0;i<data.length;i+=4){
+          r+=data[i];g+=data[i+1];b+=data[i+2];n++;
+          const lum = 0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+          if(lum<minL)minL=lum; if(lum>maxL)maxL=lum; sumL+=lum;
+        }
+        r=Math.round(r/n); g=Math.round(g/n); b=Math.round(b/n);
+        const contrast = (maxL-minL)/255;
+        const brightness = (sumL/n)/255;
+        const ratio = img.width / img.height;
+        const isPortrait = ratio < 0.85;
+        const isCardRatio = ratio > 0.6 && ratio < 0.8;
+        let confidence = 40;
+        if (isCardRatio) confidence += 25;
+        if (isPortrait) confidence += 15;
+        if (contrast > 0.5) confidence += 10;
+        if (img.width >= 500) confidence += 10;
+        confidence = Math.min(95, confidence);
+        const hue = rgbToHue(r,g,b);
+        let colorName = 'Neutral';
+        if (brightness > 0.85) colorName = 'Hell';
+        else if (brightness < 0.2) colorName = 'Dunkel';
+        else if (hue < 15 || hue >= 345) colorName = 'Rot';
+        else if (hue < 45) colorName = 'Orange';
+        else if (hue < 70) colorName = 'Gelb';
+        else if (hue < 160) colorName = 'Grün';
+        else if (hue < 200) colorName = 'Cyan';
+        else if (hue < 260) colorName = 'Blau';
+        else if (hue < 320) colorName = 'Violett';
+        else colorName = 'Pink';
+        resolve({
+          avgColor:{hex:rgbToHex(r,g,b),name:colorName},
+          brightness:Math.round(brightness*100),
+          contrast:Math.round(contrast*100),
+          orientation: isPortrait ? 'Hochformat' : 'Querformat',
+          confidence, resolution:`${img.width}×${img.height}`
+        });
+      } catch(e) {
+        resolve({avgColor:{hex:'#000',name:'—'},brightness:0,contrast:0,orientation:'—',confidence:0,resolution:'—'});
+      }
+    };
+    img.src = dataUrl;
+  });
+}
+function rgbToHue(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;if(d===0)return 0;let h;if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;if(h<0)h+=360;return h;}
+function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>Math.max(0,Math.min(255,x|0)).toString(16).padStart(2,'0')).join('');}
+
+// ============================================================
+// OCR — Multi-Varianten + Kandidaten
+// ============================================================
+async function initOCR() {
+  if (ocrWorker) return ocrWorker;
+  toast('OCR wird geladen (kann 20s dauern)...', '');
+  try { ocrWorker = await Tesseract.createWorker(['deu','eng']); }
+  catch (e) { console.warn('multi-lang failed, fallback eng', e); ocrWorker = await Tesseract.createWorker('eng'); }
+  return ocrWorker;
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Bild laden fehlgeschlagen'));
+    img.src = src;
+  });
+}
+
+async function detectCardRegion(dataUrl) {
+  const img = await loadImage(dataUrl);
+  const W = 240;
+  const H = Math.max(1, Math.round(W * img.height / img.width));
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, W, H);
+  const data = ctx.getImageData(0, 0, W, H).data;
+
+  const bgSamples = [];
+  const S = 6;
+  const sample = (x, y) => { const i = (y*W+x)*4; bgSamples.push([data[i],data[i+1],data[i+2]]); };
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    sample(x,y); sample(W-1-x,y); sample(x,H-1-y); sample(W-1-x,H-1-y);
+  }
+  const bg = [0,1,2].map(ch => {
+    const arr = bgSamples.map(p => p[ch]).sort((a,b) => a-b);
+    return arr[Math.floor(arr.length/2)];
+  });
+
+  const thr = 55;
+  const fg = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y*W+x)*4;
+    const dr = data[i]-bg[0], dg = data[i+1]-bg[1], db = data[i+2]-bg[2];
+    if (Math.sqrt(dr*dr+dg*dg+db*db) > thr) fg[y*W+x] = 1;
+  }
+
+  const rowCount = y => { let n = 0; for (let x = 0; x < W; x++) n += fg[y*W+x]; return n; };
+  const colCount = x => { let n = 0; for (let y = 0; y < H; y++) n += fg[y*W+x]; return n; };
+
+  const minRow = W * 0.20, minCol = H * 0.20;
+  let top = 0, bot = H-1, left = 0, right = W-1;
+  while (top < H-3 && rowCount(top) < minRow) top++;
+  while (bot > top+3 && rowCount(bot) < minRow) bot--;
+  while (left < W-3 && colCount(left) < minCol) left++;
+  while (right > left+3 && colCount(right) < minCol) right--;
+
+  const sx = img.width / W, sy = img.height / H;
+  const pad = 0.008;
+  const box = {
+    x: Math.max(0, Math.floor((left - W*pad) * sx)),
+    y: Math.max(0, Math.floor((top - H*pad) * sy)),
+    w: Math.min(img.width, Math.floor((right - left + 2*W*pad) * sx)),
+    h: Math.min(img.height, Math.floor((bot - top + 2*H*pad) * sy))
+  };
+  const ok = box.w > img.width * 0.35 && box.h > img.height * 0.35 && box.w < img.width && box.h < img.height;
+  return ok ? {...box, detected: true, img} : {x:0,y:0,w:img.width,h:img.height,detected:false,img};
+}
+
+function cropToBox(img, box, maxWidth = 1400) {
+  const c = document.createElement('canvas');
+  const scale = Math.min(1, maxWidth / box.w);
+  c.width = Math.max(1, Math.round(box.w * scale));
+  c.height = Math.max(1, Math.round(box.h * scale));
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, c.width, c.height);
+  return c;
+}
+
+function otsuThreshold(gray) {
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
+  const total = gray.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let sumB = 0, wB = 0, maxVar = 0, thr = 128;
+  for (let i = 0; i < 256; i++) {
+    wB += hist[i];
+    if (wB === 0) continue;
+    const wF = total - wB;
+    if (wF === 0) break;
+    sumB += i * hist[i];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) ** 2;
+    if (between > maxVar) { maxVar = between; thr = i; }
+  }
+  return thr;
+}
+
+function preprocessVariant(canvas, mode) {
+  const c = document.createElement('canvas');
+  c.width = canvas.width; c.height = canvas.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(canvas, 0, 0);
+  const id = ctx.getImageData(0, 0, c.width, c.height);
+  const d = id.data;
+  const gray = new Uint8Array(d.length / 4);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = Math.round(0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]);
+  let thr;
+  if (mode === 'otsu') thr = otsuThreshold(gray);
+  else if (mode === 'fixed') thr = 150;
+  else thr = null;
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    if (mode === 'gray') {
+      const g = Math.max(0, Math.min(255, Math.round((gray[j]-128)*1.6+128)));
+      d[i] = d[i+1] = d[i+2] = g;
+    } else {
+      const v = gray[j] > thr ? 255 : 0;
+      d[i] = d[i+1] = d[i+2] = v;
+    }
+  }
+  ctx.putImageData(id, 0, 0);
+  return c;
+}
+
+function cleanupOcrLine(raw) {
+  let s = String(raw || '').trim();
+  s = s.replace(/[^\p{L}\p{N}\s'\-,\/&:+.]/gu, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+function scoreNameCandidate(line, tessConf, weight) {
+  const s = line.trim();
+  if (s.length < 3 || s.length > 55) return 0;
+  if (!/^[A-Za-zÄÖÜäöü]/.test(s)) return 0;
+  if (!/[A-Za-z]/.test(s)) return 0;
+  const digits = (s.match(/\d/g) || []).length;
+  if (digits > s.length * 0.4) return 0;
+  if (/^\d+\s*\/\s*\d+$/.test(s)) return 0;
+  if (/^(HP|LV|Level|Stage|Basic|Trainer|Energy)\b/i.test(s) && s.length < 12) return 0;
+  const words = s.split(/\s+/).length;
+  if (words > 6) return 0;
+  if (/(.)\1{3,}/.test(s)) return 0;
+  let score = tessConf * 0.6 + weight * 10;
+  score += Math.min(words, 4) * 3;
+  const capWords = (s.match(/\b[A-ZÄÖÜ][a-zäöüß]{2,}/g) || []).length;
+  score += capWords * 4;
+  if (s.length >= 6 && s.length <= 30) score += 8;
+  return score;
+}
+
+function mergeCandidates(all, limit = 3) {
+  const map = new Map();
+  for (const c of all) {
+    const key = c.text.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!key) continue;
+    const ex = map.get(key);
+    if (!ex || c.score > ex.score) map.set(key, c);
+  }
+  return [...map.values()].sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+function cropRegionVertical(canvas, startPct, endPct, upscale = 2) {
+  const sy = Math.floor(canvas.height * startPct);
+  const sh = Math.max(1, Math.floor(canvas.height * (endPct - startPct)));
+  const c = document.createElement('canvas');
+  c.width = Math.min(2000, canvas.width * upscale);
+  c.height = Math.min(400, sh * upscale);
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, c.width, c.height);
+  return c;
+}
+
+async function extractCardName(imageDataUrl, onProgress) {
+  try {
+    onProgress && onProgress('detect', 'active');
+    const region = await detectCardRegion(imageDataUrl);
+    onProgress && onProgress('detect', 'done');
+
+    const cropped = cropToBox(region.img, {x:region.x, y:region.y, w:region.w, h:region.h}, 1400);
+    const nameCanvas = cropRegionVertical(cropped, 0.03, 0.16, 4);
+    const subCanvas  = cropRegionVertical(cropped, 0.14, 0.28, 3);
+
+    onProgress && onProgress('preprocess', 'active');
+    const variants = {
+      name_otsu:  preprocessVariant(nameCanvas, 'otsu'),
+      name_fixed: preprocessVariant(nameCanvas, 'fixed'),
+      name_gray:  preprocessVariant(nameCanvas, 'gray'),
+      sub_otsu:   preprocessVariant(subCanvas, 'otsu')
+    };
+    onProgress && onProgress('preprocess', 'done');
+
+    onProgress && onProgress('ocr', 'active');
+    const worker = await Promise.race([
+      initOCR(),
+      new Promise((_,rej) => setTimeout(() => rej(new Error('OCR Timeout')), 90000))
+    ]);
+
+    const candidates = [];
+    const rawTexts = [];
+
+    await worker.setParameters({
+      tessedit_pageseg_mode: '7',
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüßÉÈÀÂÇ-' ,.:&",
+      preserve_interword_spaces: '1'
+    });
+
+    for (const key of ['name_otsu','name_fixed','name_gray']) {
+      try {
+        const { data } = await worker.recognize(variants[key]);
+        rawTexts.push(data.text);
+        const conf = Number(data.confidence) || 0;
+        const cleaned = cleanupOcrLine(data.text);
+        if (!cleaned) continue;
+        const w = key === 'name_otsu' ? 1 : (key === 'name_fixed' ? 0.9 : 0.8);
+        const s1 = scoreNameCandidate(cleaned, conf, w);
+        if (s1 > 0) candidates.push({ text: cleaned, score: s1, conf, source: key });
+        for (const line of data.text.split(/\n+/)) {
+          const lc = cleanupOcrLine(line);
+          if (!lc || lc === cleaned) continue;
+          const s2 = scoreNameCandidate(lc, conf * 0.9, 0.6);
+          if (s2 > 0) candidates.push({ text: lc, score: s2, conf, source: key });
+        }
+      } catch (e) { console.warn('ocr variant failed', key, e); }
+    }
+
+    try {
+      await worker.setParameters({ tessedit_pageseg_mode: '6' });
+      const { data } = await worker.recognize(variants.sub_otsu);
+      rawTexts.push(data.text);
+      for (const line of data.text.split(/\n+/)) {
+        const lc = cleanupOcrLine(line);
+        if (!lc) continue;
+        const s = scoreNameCandidate(lc, Number(data.confidence)*0.7, 0.4);
+        if (s > 0) candidates.push({ text: lc, score: s, conf: Number(data.confidence), source: 'sub' });
+      }
+    } catch (e) { console.warn('sub-region ocr failed', e); }
+
+    try { await worker.setParameters({ tessedit_pageseg_mode: '3' }); } catch {}
+
+    onProgress && onProgress('ocr', 'done');
+    const merged = mergeCandidates(candidates, 5);
+    return {
+      candidates: merged,
+      top: merged[0]?.text || '',
+      rawText: rawTexts.join('\n---\n').slice(0, 1500),
+      detected: region.detected,
+      box: { x: region.x, y: region.y, w: region.w, h: region.h }
+    };
+  } catch (err) {
+    console.error('extractCardName:', err);
+    try { await ocrWorker?.terminate(); } catch {}
+    ocrWorker = null;
+    onProgress && onProgress('ocr', 'error');
+    return { candidates: [], top: '', rawText: '', detected: false, box: null, error: err.message };
+  }
+}
+
+function setScanStep(stepName, state) {
+  const el = document.querySelector(`.scan-step[data-step="${stepName}"]`);
+  if (!el) return;
+  el.classList.remove('active','done','error');
+  if (state) el.classList.add(state);
+}
+function resetScanSteps() {
+  document.querySelectorAll('.scan-step').forEach(el => el.classList.remove('active','done','error'));
+}
+
+function updateBoxOverlay(box, imgEl, canvasEl) {
+  const scaleX = imgEl.clientWidth / imgEl.naturalWidth;
+  const scaleY = imgEl.clientHeight / imgEl.naturalHeight;
+  canvasEl.width = imgEl.clientWidth;
+  canvasEl.height = imgEl.clientHeight;
+  canvasEl.style.display = 'block';
+  const ctx = canvasEl.getContext('2d');
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  ctx.strokeStyle = '#4ade80';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(box.x*scaleX, box.y*scaleY, box.w*scaleX, box.h*scaleY);
+  ctx.fillStyle = 'rgba(74,222,128,.08)';
+  ctx.fillRect(box.x*scaleX, box.y*scaleY, box.w*scaleX, box.h*scaleY);
+}
+
+// ============================================================
+// ANALYZE FLOW
+// ============================================================
+$('analyzeBtn').onclick = async () => {
+  if (!currentImage) return;
+  const btn = $('analyzeBtn');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Analysiere...';
+  $('previewWrap').classList.add('scanning');
+  $('scanProgress').style.display = 'block';
+  $('candidatesPanel').style.display = 'none';
+  $('resultsPanel').style.display = 'none';
+  resetScanSteps();
+
+  try {
+    const analysisP = analyzeImage(currentImage);
+    let ocrResult = { candidates: [], top: '', rawText: '', detected: false, box: null };
+    if (currentGame !== 'manual') {
+      ocrResult = await extractCardName(currentImage, setScanStep);
+    } else {
+      setScanStep('detect', 'done');
+      setScanStep('preprocess', 'done');
+      setScanStep('ocr', 'done');
+    }
+
+    if (ocrResult.detected && ocrResult.box) {
+      setTimeout(() => {
+        try { updateBoxOverlay(ocrResult.box, $('preview'), $('cardDetectOverlay')); } catch {}
+      }, 50);
+    } else {
+      $('cardDetectOverlay').style.display = 'none';
+    }
+
+    const a = await analysisP;
+    $('resultsPanel').style.display = 'block';
+    const badge = ocrResult.detected
+      ? '<span style="color:var(--green);">✅ Karte erkannt</span>'
+      : '<span style="color:var(--yellow);">⚠️ Karte nicht erkannt – verwende ganzes Bild</span>';
+    $('analysisResult').innerHTML = `
+      <div class="confidence">
+        <div class="row-between">
+          <span>Bildqualität</span>
+          <strong style="color:var(--accent);">${a.confidence}%</strong>
+        </div>
+        <div class="bar"><div class="fill" style="width:${a.confidence}%"></div></div>
+        <div style="margin-top:10px;font-size:.78rem;color:var(--muted);line-height:1.6;">
+          ${badge}<br>
+          📐 ${a.orientation} · ${a.resolution}<br>
+          🎨 Dominant: ${a.colorName} <span style="display:inline-block;width:11px;height:11px;background:${a.avgColor.hex};border-radius:3px;vertical-align:middle;border:1px solid #333;"></span><br>
+          ☀️ Helligkeit: ${a.brightness}% · Kontrast: ${a.contrast}%
+        </div>
+      </div>`;
+
+    if (ocrResult.rawText) {
+      $('ocrWrap').style.display = 'block';
+      $('ocrText').textContent = ocrResult.rawText;
+    } else {
+      $('ocrWrap').style.display = 'none';
+    }
+
+    if (currentGame !== 'manual' && ocrResult.candidates.length > 0) {
+      renderCandidates(ocrResult.candidates, currentGame);
+    } else if (currentGame !== 'manual') {
+      $('candidatesPanel').style.display = 'block';
+      $('candidateList').innerHTML = `
+        <div style="padding:16px;color:var(--muted);font-size:.85rem;text-align:center;line-height:1.6;">
+          😕 Kein brauchbarer Text erkannt<br>
+          <span style="font-size:.75rem;opacity:.7;">Besser: Karte formatfüllend, gute Beleuchtung, ruhige Hand</span>
+        </div>`;
+    }
+  } catch (err) {
+    console.error(err);
+    toast('Analyse fehlgeschlagen: ' + err.message, 'error');
+  } finally {
+    $('previewWrap').classList.remove('scanning');
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+};
+
+function renderCandidates(candidates, game) {
+  $('candidatesPanel').style.display = 'block';
+  $('candidateList').innerHTML = candidates.map((c, i) => `
+    <button class="candidate-btn ${i === 0 ? 'best' : ''}" data-index="${i}">
+      <span class="rank">${i + 1}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.text)}</span>
+      <span class="conf">${Math.round(c.conf)}%</span>
+    </button>
+  `).join('');
+
+  $('candidateList').querySelectorAll('.candidate-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const idx = parseInt(btn.dataset.index);
+      await performSearch(candidates[idx].text, game);
+    };
+  });
+}
+
+async function performSearch(query, game) {
+  setScanStep('search', 'active');
+  $('apiResultsWrap').style.display = 'none';
+  try {
+    const results = await searchCardAPI(game, query);
+    if (!results.length) {
+      toast(`Keine Treffer für "${query}"`, 'error');
+      setScanStep('search', 'error');
+      return;
+    }
+    setScanStep('search', 'done');
+    renderAPIResults(results, game, query, 'apiResults');
+  } catch (e) {
+    setScanStep('search', 'error');
+    toast('Suche: ' + e.message, 'error');
+  }
+}
+
+$('manualNameBtn').onclick = () => {
+  const name = prompt('Kartenname eingeben:');
+  if (name && name.trim().length >= 2) performSearch(name.trim(), currentGame);
+};
+
+$('toggleAnalysis').onclick = () => {
+  const el = $('analysisCollapse');
+  const hidden = el.style.display === 'none';
+  el.style.display = hidden ? 'block' : 'none';
+  $('toggleAnalysis').textContent = hidden ? '▾' : '▸';
+};
+
+// ============================================================
+// FETCH WITH TIMEOUT
+// ============================================================
+async function fetchT(url, ms = 12000, opts = {}) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try { return await fetch(url, {...opts, signal: ctrl.signal}); }
+  finally { clearTimeout(t); }
+}
+
+// ============================================================
+// API LAYER
+// ============================================================
+async function searchCardAPI(game, query) {
+  const q = (query || '').trim();
+  if (!q) return [];
+  try {
+    if (game === 'mtg') return await searchMTG(q);
+    if (game === 'ygo') return await searchYGO(q);
+    if (game === 'pkmn') return await searchPKMN(q);
+  } catch (err) {
+    console.error('API:', err);
+    toast(err.name === 'AbortError' ? 'Timeout – Netzwerk prüfen' : 'API: ' + err.message, 'error');
+  }
+  return [];
+}
+
+async function searchMTG(query) {
+  const url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=cards&order=name`;
+  const res = await fetchT(url);
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error('Scryfall ' + res.status);
+  const json = await res.json();
+  return (json.data || []).slice(0, 20).map(c => ({
+    api: 'mtg', name: c.name, set: c.set_name || '',
+    setCode: (c.set || '').toUpperCase(), number: c.collector_number || '',
+    rarity: ({common:'Common',uncommon:'Uncommon',rare:'Rare',mythic:'Ultra Rare',special:'Promo',bonus:'Promo'})[c.rarity] || 'Rare',
+    lang: (c.lang || 'en').toUpperCase(),
+    price: c.prices?.eur ? parsePrice(c.prices.eur) : (c.prices?.usd ? parsePrice(c.prices.usd) * 0.92 : 0),
+    image: c.image_uris?.normal || c.image_uris?.small || c.card_faces?.[0]?.image_uris?.normal || null
+  }));
+}
+
+async function searchYGO(query) {
+  const url = `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`;
+  let res;
+  try { res = await fetchT(url, 15000); }
+  catch {
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    res = await fetchT(proxy, 15000);
+  }
+  if (res.status === 400 || res.status === 404) return [];
+  if (!res.ok) throw new Error('YGOPRODeck ' + res.status);
+  const json = await res.json();
+  return (json.data || []).slice(0, 20).map(c => {
+    const s = c.card_sets?.[0];
+    const pUSD = s?.set_price ? parsePrice(s.set_price) : 0;
+    const r = (s?.set_rarity || '').toLowerCase();
+    let rarity = 'Rare';
+    if (r.includes('secret')) rarity = 'Secret Rare';
+    else if (r.includes('ultimate') || r.includes('ghost') || r.includes('starlight')) rarity = 'Ultra Rare';
+    else if (r.includes('ultra')) rarity = 'Ultra Rare';
+    else if (r.includes('super')) rarity = 'Holo';
+    else if (r.includes('common')) rarity = 'Common';
+    return {
+      api: 'ygo', name: c.name,
+      set: s?.set_name || c.archetype || 'Yu-Gi-Oh!',
+      setCode: s?.set_code || '', number: s?.set_code || '',
+      rarity, lang: 'EN', price: pUSD * 0.92,
+      image: c.card_images?.[0]?.image_url_small || c.card_images?.[0]?.image_url || null
+    };
+  });
+}
+
+async function searchPKMN(query) {
+  const key = localStorage.getItem(PKMN_KEY_STORAGE) || '';
+  const url = `https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(query)}*&pageSize=20`;
+  const opts = key ? { headers: { 'X-Api-Key': key } } : {};
+  const res = await fetchT(url, 15000, opts);
+  if (!res.ok) throw new Error('Pokémon ' + res.status);
+  const json = await res.json();
+  return (json.data || []).map(c => {
+    const p = c.tcgplayer?.prices || {};
+    const usd = p?.holofoil?.market || p?.normal?.market || p?.reverseHolofoil?.market || 0;
+    const rr = (c.rarity || '').toLowerCase();
+    let rarity = 'Common';
+    if (rr.includes('secret')) rarity = 'Secret Rare';
+    else if (rr.includes('ultra') || rr.includes('illustration') || rr.includes('rainbow')) rarity = 'Ultra Rare';
+    else if (rr.includes('holo')) rarity = 'Holo';
+    else if (rr.includes('rare')) rarity = 'Rare';
+    else if (rr.includes('uncommon')) rarity = 'Uncommon';
+    return {
+      api: 'pkmn', name: c.name, set: c.set?.name || '',
+      setCode: c.set?.id?.toUpperCase() || '', number: c.number || '',
+      rarity, lang: 'EN', price: parsePrice(usd) * 0.92,
+      image: c.images?.small || c.images?.large || null
+    };
+  });
+}
+
+// ============================================================
+// PSA API
+// ============================================================
+async function fetchPSACert(certNumber) {
+  const token = localStorage.getItem(PSA_KEY_STORAGE);
+  if (!token) { toast('PSA-Token fehlt (Daten-Tab)', 'error'); return null; }
+  const clean = String(certNumber || '').replace(/\D/g, '');
+  if (clean.length < 7) { toast('Cert-Nummer ungültig', 'error'); return null; }
+  const url = `https://api.psacard.com/publicapi/cert/GetByCertNumber/${clean}`;
+  try {
+    const res = await fetchT(url, 15000, { headers: { 'Authorization': 'bearer ' + token } });
+    if (res.status === 401 || res.status === 403 || res.status === 500) {
+      toast('PSA-Token ungültig oder abgelaufen', 'error');
+      return null;
+    }
+    if (!res.ok) throw new Error('PSA ' + res.status);
+    const json = await res.json();
+    if (!json.IsValidRequest) { toast('PSA: ' + (json.ServerMessage || 'Fehler'), 'error'); return null; }
+    if (json.ServerMessage && /no data/i.test(json.ServerMessage)) { toast('Cert-Nummer nicht gefunden', 'error'); return null; }
+    return json;
+  } catch (err) {
+    console.error('PSA:', err);
+    toast('PSA-Abfrage fehlgeschlagen: ' + err.message, 'error');
+    return null;
+  }
+}
+
+function mapPSAGradeToCondition(grade) {
+  const g = parseInt(grade);
+  if (isNaN(g)) return 'Near Mint';
+  if (g >= 10) return 'Mint';
+  if (g >= 9) return 'Near Mint';
+  if (g >= 7) return 'Excellent';
+  if (g >= 5) return 'Good';
+  if (g >= 3) return 'Played';
+  return 'Poor';
+}
+
+$('psaApiToken').value = localStorage.getItem(PSA_KEY_STORAGE) || '';
+$('savePsaTokenBtn').onclick = () => {
+  const v = $('psaApiToken').value.trim();
+  if (v) { localStorage.setItem(PSA_KEY_STORAGE, v); toast('PSA-Token gespeichert', 'success'); }
+  else { localStorage.removeItem(PSA_KEY_STORAGE); toast('PSA-Token entfernt', 'success'); }
+  checkAPIStatus();
+};
+$('testPsaTokenBtn').onclick = async () => {
+  const btn = $('testPsaTokenBtn');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  const data = await fetchPSACert('00000000');
+  btn.disabled = false; btn.innerHTML = orig;
+  if (data) toast('PSA-Verbindung OK', 'success');
+};
+
+$('f_is_graded').onchange = e => {
+  $('psaFieldWrap').style.display = e.target.checked ? 'block' : 'none';
+};
+
+$('psaLookupBtn').onclick = async () => {
+  const cert = $('f_psa_cert').value.trim();
+  if (!cert) { toast('Cert-Nummer eingeben', 'error'); return; }
+  const btn = $('psaLookupBtn');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  const data = await fetchPSACert(cert);
+  btn.disabled = false; btn.innerHTML = orig;
+  if (!data) return;
+  pendingPsaData = data;
+  if (data.Subject) $('f_name').value = data.Year ? `${data.Year} ${data.Subject}` : data.Subject;
+  if (data.Brand) $('f_set').value = data.Brand;
+  if (data.CardNumber) $('f_number').value = data.CardNumber;
+  if (data.Grade) $('f_condition').value = mapPSAGradeToCondition(data.Grade);
+  $('psaResult').innerHTML = `
+    <div class="psa-box">
+      <div class="psa-top">
+        <span class="lbl">✅ Verifiziert</span>
+        <span class="psa-grade-pill">${escapeHtml(data.GradeDescription || 'PSA ' + (data.Grade || '?'))}</span>
+      </div>
+      <div style="font-size:.85rem;line-height:1.7;">
+        <strong>${escapeHtml(data.Subject || '—')}</strong><br>
+        <span style="color:var(--muted);">
+          ${escapeHtml(data.Year || '')} · ${escapeHtml(data.Brand || '')} 
+          ${data.CardNumber ? '· #' + escapeHtml(data.CardNumber) : ''}
+        </span>
+        ${data.TotalPopulation ? `<br><span style="color:var(--muted);">Population: ${data.TotalPopulation} · PSA ${escapeHtml(String(data.Grade || '?'))}: ${data.PopulationWithEqualGrade || 0}</span>` : ''}
+      </div>
+    </div>`;
+  toast('PSA-Daten geladen', 'success');
+};
+
+// ============================================================
+// API RESULTS
+// ============================================================
+function renderAPIResults(results, game, query, containerId) {
+  const wrap = containerId === 'apiResults' ? $('apiResultsWrap') : $('searchResultsWrap');
+  const list = $(containerId);
+  if (!results || !results.length) {
+    list.innerHTML = `<div style="padding:16px;color:var(--muted);font-size:.85rem;text-align:center;line-height:1.6;">
+      Keine Treffer für "<strong>${escapeHtml(query)}</strong>"<br>
+      <span style="font-size:.75rem;opacity:.7;">Kürzerer Suchbegriff probieren</span>
+    </div>`;
+  } else {
+    list.innerHTML = results.map((r, i) => `
+      <div class="result-item" data-index="${i}">
+        ${r.image ? `<img src="${escapeHtml(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph',textContent:'🎴'}))">` : `<div class="ph">🎴</div>`}
+        <div>
+          <div class="title">${escapeHtml(r.name)}</div>
+          <div class="sub">
+            <span class="badge b-${r.api}">${r.api.toUpperCase()}</span>
+            ${escapeHtml(r.set)}${r.setCode ? ' · ' + escapeHtml(r.setCode) : ''}<br>
+            ${escapeHtml(r.rarity)}${r.number ? ' · #' + escapeHtml(r.number) : ''}
+          </div>
+        </div>
+        <div class="price-tag">${r.price > 0 ? fmtEUR(r.price) : '—'}</div>
+      </div>
+    `).join('');
+    list.querySelectorAll('.result-item').forEach(el => {
+      el.onclick = () => pickResult(results[parseInt(el.dataset.index)], game);
+    });
+  }
+  wrap.style.display = 'block';
+}
+
+function pickResult(card, game) {
+  pendingCardData = card;
+  editingCardId = null;
+  $('formModalTitle').textContent = 'Bestätigen';
+  $('f_name').value = card.name || '';
+  $('f_set').value = card.set || '';
+  $('f_number').value = (card.setCode ? card.setCode + '-' : '') + (card.number || '');
+  $('f_rarity').value = card.rarity || 'Rare';
+  $('f_game').value = game;
+  $('f_lang').value = card.lang || 'EN';
+  $('f_price').value = card.price > 0 ? card.price.toFixed(2) : '';
+  $('f_condition').value = 'Near Mint';
+  $('f_qty').value = 1;
+  $('f_is_graded').checked = false;
+  $('psaFieldWrap').style.display = 'none';
+  $('psaResult').innerHTML = '';
+  $('f_psa_cert').value = '';
+  pendingPsaData = null;
+  $('formModal').classList.add('show');
+}
+
+function closeFormModal() {
+  $('formModal').classList.remove('show');
+  pendingCardData = null;
+  pendingPsaData = null;
+  editingCardId = null;
+}
+
+$('cardForm').onsubmit = e => {
+  e.preventDefault();
+  const now = new Date().toISOString();
+  const price = parsePrice($('f_price').value);
+  const isGraded = $('f_is_graded').checked;
+
+  if (editingCardId) {
+    const card = collection.find(c => c.id === editingCardId);
+    if (!card) return;
+    if (price !== card.price && price > 0) {
+      if (!Array.isArray(card.priceHistory)) card.priceHistory = [];
+      card.priceHistory.push({ t: now, p: price });
+    }
+    card.name = $('f_name').value.trim();
+    card.set = $('f_set').value.trim();
+    card.number = $('f_number').value.trim();
+    card.rarity = $('f_rarity').value;
+    card.condition = $('f_condition').value;
+    card.lang = $('f_lang').value;
+    card.game = $('f_game').value;
+    card.price = price;
+    card.qty = parseInt($('f_qty').value) || 1;
+    card.notes = $('f_notes').value.trim();
+    card.isGraded = isGraded;
+    card.psaCert = isGraded ? $('f_psa_cert').value.trim() : null;
+    if (pendingPsaData) {
+      card.psaGrade = pendingPsaData.Grade;
+      card.psaGradeDesc = pendingPsaData.GradeDescription;
+      card.psaPopulation = pendingPsaData.TotalPopulation;
+      card.psaPopEqual = pendingPsaData.PopulationWithEqualGrade;
+    } else if (!isGraded) {
+      delete card.psaGrade; delete card.psaGradeDesc;
+      delete card.psaPopulation; delete card.psaPopEqual;
+    }
+    save(); renderCollection(); closeModal(); closeFormModal();
+    toast('Karte aktualisiert ✓', 'success');
+    return;
+  }
+
+  const image = (pendingCardData && pendingCardData.image) ? pendingCardData.image : (currentImage || null);
+  const card = {
+    id: Date.now() + Math.random().toString(36).slice(2,8),
+    name: $('f_name').value.trim(),
+    set: $('f_set').value.trim(),
+    number: $('f_number').value.trim(),
+    rarity: $('f_rarity').value,
+    condition: $('f_condition').value,
+    lang: $('f_lang').value,
+    game: $('f_game').value,
+    price, qty: parseInt($('f_qty').value) || 1,
+    notes: $('f_notes').value.trim(),
+    image,
+    added: now,
+    api: pendingCardData ? pendingCardData.api : null,
+    priceHistory: price > 0 ? [{ t: now, p: price }] : [],
+    isGraded,
+    psaCert: isGraded ? $('f_psa_cert').value.trim() : null
+  };
+  if (pendingPsaData) {
+    card.psaGrade = pendingPsaData.Grade;
+    card.psaGradeDesc = pendingPsaData.GradeDescription;
+    card.psaPopulation = pendingPsaData.TotalPopulation;
+    card.psaPopEqual = pendingPsaData.PopulationWithEqualGrade;
+  }
+  if (!card.name) { toast('Name erforderlich', 'error'); return; }
+  collection.push(card);
+  save(); renderCollection();
+  toast(`"${card.name}" gespeichert ✓`, 'success');
+  closeFormModal();
+  $('cardForm').reset();
+  $('f_qty').value = 1;
+  $('psaFieldWrap').style.display = 'none';
+  $('psaResult').innerHTML = '';
+  pendingPsaData = null;
+  currentImage = null;
+  $('preview').src = '';
+  $('previewWrap').style.display = 'none';
+  $('dropzone').style.display = 'block';
+  $('resultsPanel').style.display = 'none';
+  $('candidatesPanel').style.display = 'none';
+  $('scanProgress').style.display = 'none';
+  $('cardDetectOverlay').style.display = 'none';
+  $('analysisResult').innerHTML = '';
+  $('ocrWrap').style.display = 'none';
+  $('apiResultsWrap').style.display = 'none';
+};
+
+// ============================================================
+// SEARCH
+// ============================================================
+$('searchBtn').onclick = doSearch;
+$('searchQuery').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+
+async function doSearch() {
+  const q = $('searchQuery').value.trim();
+  if (q.length < 2) { toast('Mindestens 2 Zeichen', 'error'); return; }
+  const btn = $('searchBtn');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  $('searchEmpty').style.display = 'none';
+  try {
+    const results = await searchCardAPI(searchGame, q);
+    renderAPIResults(results, searchGame, q, 'searchResults');
+  } catch (err) {
+    toast('Fehler: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
+// ============================================================
+// COLLECTION
+// ============================================================
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.onclick = () => {
+    const type = chip.dataset.filterType;
+    document.querySelectorAll(`.filter-chip[data-filter-type="${type}"]`).forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    if (type === 'game') filterGame = chip.dataset.value;
+    if (type === 'rarity') filterRarity = chip.dataset.value;
+    renderCollection();
+  };
+});
+
+function priceDelta(card) {
+  const h = card.priceHistory || [];
+  if (h.length < 2) return null;
+  const first = h[0].p, last = h[h.length-1].p;
+  if (first <= 0) return null;
+  return { abs: last-first, pct: ((last-first)/first)*100 };
+}
+
+function renderCollection() {
+  const grid = $('collectionGrid');
+  const empty = $('emptyState');
+  const q = $('searchInput').value.toLowerCase().trim();
+  const sort = $('sortBy').value;
+
+  let items = collection.slice();
+  if (q) items = items.filter(c =>
+    (c.name||'').toLowerCase().includes(q) ||
+    (c.set||'').toLowerCase().includes(q) ||
+    (c.number||'').toLowerCase().includes(q));
+  if (filterGame) items = items.filter(c => (c.game || 'manual') === filterGame);
+  if (filterRarity) items = items.filter(c => c.rarity === filterRarity);
+
+  items.sort((a,b) => {
+    if (sort === 'name_asc') return (a.name||'').localeCompare(b.name||'');
+    if (sort === 'price_desc') return (b.price||0) - (a.price||0);
+    if (sort === 'price_asc') return (a.price||0) - (b.price||0);
+    if (sort === 'change_desc') return (priceDelta(b)?.pct||0) - (priceDelta(a)?.pct||0);
+    return new Date(b.added) - new Date(a.added);
+  });
+
+  if (!items.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    empty.querySelector('p').textContent = collection.length === 0
+      ? 'Noch keine Karten'
+      : 'Keine Karten mit diesem Filter';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const rarStyles = {
+    'Common':'rgba(139,147,163,.85)',
+    'Uncommon':'rgba(74,222,128,.85)',
+    'Rare':'rgba(108,140,255,.9)',
+    'Holo':'linear-gradient(135deg,#b06cff,#6c8cff)',
+    'Ultra Rare':'linear-gradient(135deg,#fbbf24,#f97316)',
+    'Secret Rare':'linear-gradient(135deg,#ef4444,#b06cff)',
+    'Promo':'rgba(251,191,36,.9)'
+  };
+
+  grid.innerHTML = items.map(card => {
+    const bg = rarStyles[card.rarity] || rarStyles['Common'];
+    const delta = priceDelta(card);
+    const deltaHtml = delta
+      ? `<span class="d ${delta.pct >= 0 ? 'up':'down'}">${delta.pct >= 0 ? '▲':'▼'}${Math.abs(delta.pct).toFixed(1)}%</span>`
+      : '';
+    const psaPill = card.isGraded && card.psaGradeDesc
+      ? `<span class="psa-pill">PSA ${card.psaGrade || '?'}</span>`
+      : (card.isGraded ? `<span class="psa-pill">PSA</span>` : '');
+    return `
+      <div class="card-tile" data-id="${card.id}">
+        ${imgTag(card.image, 'card-thumb', card.name)}
+        <span class="rarity-pill" style="background:${bg};">${escapeHtml(card.rarity||'—')}</span>
+        ${psaPill}
+        <div class="card-tile-info">
+          <div class="n">${escapeHtml(card.name)}</div>
+          <div class="m"><span>${escapeHtml((card.set||'—').slice(0,14))}</span><span>×${card.qty}</span></div>
+          ${card.price > 0 ? `<div class="p-row"><span class="p">${fmtEUR(card.price)}</span>${deltaHtml}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.card-tile').forEach(el => {
+    el.onclick = () => openModal(el.dataset.id);
+  });
+}
+
+['searchInput','sortBy'].forEach(id => $(id).addEventListener('input', renderCollection));
+
+// ============================================================
+// SPARKLINE
+// ============================================================
+function buildSparkline(history, w = 320, h = 56) {
+  if (!history || !history.length) return '';
+  const pts = history.map(x => x.p).filter(p => isFinite(p));
+  if (!pts.length) return '';
+  if (pts.length === 1) pts.push(pts[0]);
+  const mn = Math.min(...pts), mx = Math.max(...pts);
+  const range = (mx - mn) || 1;
+  const padY = 6;
+  const stepX = (w - 20) / (pts.length - 1);
+  const points = pts.map((p, i) => {
+    const x = 10 + i * stepX;
+    const y = h - padY - ((p - mn) / range) * (h - 2 * padY);
+    return [x, y];
+  });
+  const poly = points.map(p => p.join(',')).join(' ');
+  const up = pts[pts.length-1] >= pts[0];
+  const stroke = up ? '#4ade80' : '#f87171';
+  const area = `10,${h-padY} ${poly} ${10 + (pts.length-1)*stepX},${h-padY}`;
+  const fill = up ? 'rgba(74,222,128,.14)' : 'rgba(248,113,113,.14)';
+  const [lx, ly] = points[points.length-1];
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polygon fill="${fill}" points="${area}"/>
+    <polyline fill="none" stroke="${stroke}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${poly}"/>
+    <circle cx="${lx}" cy="${ly}" r="3.5" fill="${stroke}"/>
+  </svg>`;
+}
+
+function renderPriceBox(card) {
+  const h = card.priceHistory || [];
+  if (!h.length && card.price <= 0) {
+    return `<div class="price-box"><div class="lbl">Preisverlauf</div>
+      <div style="color:var(--muted);font-size:.85rem;margin-top:6px;">Noch keine Preisdaten</div></div>`;
+  }
+  const delta = priceDelta(card);
+  const dc = delta ? (delta.pct >= 0 ? 'up' : 'down') : '';
+  const ds = delta
+    ? `${delta.pct >= 0 ? '▲' : '▼'} ${delta.abs >= 0 ? '+' : ''}${delta.abs.toFixed(2)} € (${delta.pct >= 0 ? '+' : ''}${delta.pct.toFixed(1)}%)`
+    : '<span style="color:var(--muted);">Erst ein Snapshot</span>';
+  const recent = h.slice(-4).reverse().map(s =>
+    `<div class="r"><span>${fmtDate(s.t)}</span><span>${fmtEUR(s.p)}</span></div>`
+  ).join('');
+  return `<div class="price-box">
+    <div class="head"><span class="lbl">Verlauf (${h.length})</span><span class="cur">${fmtEUR(card.price)}</span></div>
+    <div class="dlg ${dc}">${ds}</div>
+    ${buildSparkline(h)}
+    ${recent ? `<div class="hist-list">${recent}</div>` : ''}
+  </div>`;
+}
+
+function renderPSABox(card) {
+  if (!card.isGraded || !card.psaCert) return '';
+  return `<div class="psa-box">
+    <div class="psa-top">
+      <span class="lbl">🛡️ PSA Grading</span>
+      <span class="psa-grade-pill">${escapeHtml(card.psaGradeDesc || 'PSA ' + (card.psaGrade || '?'))}</span>
+    </div>
+    <div class="detail-list" style="background:transparent;border:none;padding:0;margin:0;">
+      <div class="detail-row"><span class="k">Cert-Nr.</span><span class="v">${escapeHtml(card.psaCert)}</span></div>
+      ${card.psaPopulation ? `<div class="detail-row"><span class="k">Population</span><span class="v">${card.psaPopulation}</span></div>` : ''}
+      ${card.psaPopEqual ? `<div class="detail-row"><span class="k">In diesem Grade</span><span class="v" style="color:var(--green);">${card.psaPopEqual}</span></div>` : ''}
+    </div>
+    <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px;" onclick="reverifyPSA('${card.id}')">🔄 Erneut prüfen</button>
+  </div>`;
+}
+
+// ============================================================
+// DETAIL MODAL
+// ============================================================
+function openModal(id) {
+  const card = collection.find(c => c.id === id);
+  if (!card) return;
+  currentCardId = id;
+  $('modalName').textContent = card.name;
+  $('modalSet').textContent = [card.set, card.number].filter(Boolean).join(' · ') || '—';
+  const wrap = $('modalImgWrap');
+  if (card.image) {
+    wrap.innerHTML = `<img src="${escapeHtml(card.image)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.innerHTML='<div class=&quot;ph&quot;>🎴</div>'">`;
+  } else {
+    wrap.innerHTML = `<div class="ph">🎴</div>`;
+  }
+  $('modalPsaBox').innerHTML = renderPSABox(card);
+  $('modalPriceBox').innerHTML = renderPriceBox(card);
+  const gameNames = {mtg:'Magic',ygo:'Yu-Gi-Oh!',pkmn:'Pokémon',manual:'Andere'};
+  $('modalDetails').innerHTML = `
+    <div class="detail-row"><span class="k">Spiel</span><span class="v">${gameNames[card.game] || '—'}</span></div>
+    <div class="detail-row"><span class="k">Seltenheit</span><span class="v">${escapeHtml(card.rarity)}</span></div>
+    <div class="detail-row"><span class="k">Zustand</span><span class="v">${escapeHtml(card.condition)}</span></div>
+    <div class="detail-row"><span class="k">Sprache</span><span class="v">${escapeHtml(card.lang)}</span></div>
+    <div class="detail-row"><span class="k">Anzahl</span><span class="v">${card.qty}</span></div>
+    <div class="detail-row"><span class="k">Gesamtwert</span><span class="v" style="color:var(--green);">${fmtEUR(card.price * card.qty)}</span></div>
+    <div class="detail-row"><span class="k">Hinzugefügt</span><span class="v">${fmtDate(card.added)}</span></div>
+    ${card.notes ? `<div class="detail-row"><span class="k">Notizen</span><span class="v" style="font-weight:400;text-align:left;max-width:60%;">${escapeHtml(card.notes)}</span></div>` : ''}
+  `;
+  $('modal').classList.add('show');
+}
+
+function closeModal() { $('modal').classList.remove('show'); currentCardId = null; }
+$('modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
+
+$('modalDelete').onclick = () => {
+  if (!currentCardId) return;
+  const card = collection.find(c => c.id === currentCardId);
+  if (!card) return;
+  if (!confirm(`"${card.name}" löschen?`)) return;
+  collection = collection.filter(c => c.id !== currentCardId);
+  save(); closeModal(); renderCollection();
+  toast('Gelöscht', 'success');
+};
+
+$('modalEdit').onclick = () => {
+  if (!currentCardId) return;
+  const card = collection.find(c => c.id === currentCardId);
+  if (!card) return;
+  editingCardId = currentCardId;
+  $('formModalTitle').textContent = 'Bearbeiten';
+  $('f_name').value = card.name || '';
+  $('f_set').value = card.set || '';
+  $('f_number').value = card.number || '';
+  $('f_rarity').value = card.rarity || 'Rare';
+  $('f_condition').value = card.condition || 'Near Mint';
+  $('f_lang').value = card.lang || 'EN';
+  $('f_game').value = card.game || 'manual';
+  $('f_price').value = card.price > 0 ? card.price.toFixed(2) : '';
+  $('f_qty').value = card.qty || 1;
+  $('f_notes').value = card.notes || '';
+  $('f_is_graded').checked = !!card.isGraded;
+  $('psaFieldWrap').style.display = card.isGraded ? 'block' : 'none';
+  $('f_psa_cert').value = card.psaCert || '';
+  if (card.isGraded && card.psaGradeDesc) {
+    pendingPsaData = {
+      Grade: card.psaGrade, GradeDescription: card.psaGradeDesc,
+      TotalPopulation: card.psaPopulation, PopulationWithEqualGrade: card.psaPopEqual,
+      Subject: card.name, Brand: card.set, Year: '', CardNumber: card.number
+    };
+  }
+  closeModal();
+  $('formModal').classList.add('show');
+};
+
+$('modalRefresh').onclick = async () => {
+  if (!currentCardId) return;
+  const card = collection.find(c => c.id === currentCardId);
+  if (!card) return;
+  const btn = $('modalRefresh');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Lade...';
+  try {
+    const np = await fetchCurrentPrice(card);
+    if (np == null) toast('Kein aktueller Preis verfügbar', 'error');
+    else {
+      if (!Array.isArray(card.priceHistory)) card.priceHistory = [];
+      card.priceHistory.push({ t: new Date().toISOString(), p: np });
+      card.price = np;
+      save();
+      $('modalPriceBox').innerHTML = renderPriceBox(card);
+      renderCollection();
+      toast('Preis: ' + fmtEUR(np), 'success');
+    }
+  } catch (e) { toast('Fehler: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
+};
+
+window.reverifyPSA = async (id) => {
+  const card = collection.find(c => c.id === id);
+  if (!card || !card.psaCert) return;
+  const btn = event?.target;
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
+  const data = await fetchPSACert(card.psaCert);
+  if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  if (!data) return;
+  card.psaGrade = data.Grade;
+  card.psaGradeDesc = data.GradeDescription;
+  card.psaPopulation = data.TotalPopulation;
+  card.psaPopEqual = data.PopulationWithEqualGrade;
+  save();
+  $('modalPsaBox').innerHTML = renderPSABox(card);
+  toast('PSA-Daten aktualisiert', 'success');
+};
+
+// ============================================================
+// PRICE FETCH + MATCHING
+// ============================================================
+function scoreMatch(result, card) {
+  let s = 0;
+  const rn = (result.name || '').toLowerCase().trim();
+  const cn = (card.name || '').toLowerCase().trim();
+  if (rn === cn) s += 100;
+  else if (rn.startsWith(cn) || cn.startsWith(rn)) s += 40;
+  else if (rn.includes(cn) || cn.includes(rn)) s += 20;
+  if (card.number && result.number && card.number === result.number) s += 60;
+  if (card.set && result.setCode && card.set.toUpperCase() === result.setCode.toUpperCase()) s += 40;
+  if (card.set && result.set && card.set.toLowerCase() === result.set.toLowerCase()) s += 30;
+  if (card.rarity && result.rarity === card.rarity) s += 15;
+  return s;
+}
+
+async function fetchCurrentPrice(card) {
+  if (!card.api || card.api === 'manual' || !card.name) return null;
+  try {
+    const results = await searchCardAPI(card.api, card.name);
+    if (!results || !results.length) return null;
+    let best = null, bs = -1;
+    for (const r of results) {
+      const s = scoreMatch(r, card);
+      if (s > bs) { bs = s; best = r; }
+    }
+    if (!best || best.price <= 0) return null;
+    return best.price;
+  } catch (e) { console.warn(e); return null; }
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function updateStats() {
+  const count = collection.reduce((s,c) => s + c.qty, 0);
+  const value = collection.reduce((s,c) => s + (c.price * c.qty), 0);
+  $('statCount').textContent = count;
+  $('statValue').textContent = fmtShort(value);
+  let start = 0, has = false;
+  collection.forEach(c => {
+    const h = c.priceHistory || [];
+    if (h.length && h[0].p > 0) { has = true; start += h[0].p * c.qty; }
+    else start += c.price * c.qty;
+  });
+  const dEl = $('statDelta');
+  if (has && start > 0 && Math.abs(value - start) > 0.01) {
+    const abs = value - start;
+    const pct = (abs/start)*100;
+    dEl.textContent = `${abs >= 0 ? '▲' : '▼'}${pct.toFixed(0)}%`;
+    dEl.className = 'd ' + (abs >= 0 ? 'up':'down');
+  } else { dEl.textContent = ''; dEl.className = 'd'; }
+}
+
+function renderRarityStats() {
+  const st = {};
+  collection.forEach(c => {
+    const r = c.rarity || 'Unbekannt';
+    st[r] = st[r] || { count: 0, value: 0 };
+    st[r].count += c.qty;
+    st[r].value += c.price * c.qty;
+  });
+  const entries = Object.entries(st).sort((a,b) => b[1].count - a[1].count);
+  if (!entries.length) { $('rarityStats').innerHTML = '<p class="hint">Keine Daten.</p>'; return; }
+  const mx = Math.max(...entries.map(e => e[1].count), 1);
+  $('rarityStats').innerHTML = entries.map(([r, s]) => `
+    <div style="margin-bottom:12px;">
+      <div class="row-between" style="font-size:.85rem;margin-bottom:4px;">
+        <span><strong>${escapeHtml(r)}</strong> · ${s.count}</span>
+        <span style="color:var(--green);">${fmtEUR(s.value)}</span>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${(s.count/mx)*100}%;background:linear-gradient(90deg,var(--accent),var(--accent-2));"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderGameStats() {
+  const st = {};
+  collection.forEach(c => {
+    const g = c.game || 'manual';
+    st[g] = st[g] || { count: 0, value: 0 };
+    st[g].count += c.qty;
+    st[g].value += c.price * c.qty;
+  });
+  const names = {mtg:'🔮 Magic',ygo:'🎴 Yu-Gi-Oh!',pkmn:'⚡ Pokémon',manual:'✏️ Andere'};
+  const entries = Object.entries(st).sort((a,b) => b[1].count - a[1].count);
+  if (!entries.length) { $('gameStats').innerHTML = '<p class="hint">Keine Daten.</p>'; return; }
+  $('gameStats').innerHTML = entries.map(([g, s]) => `
+    <div class="row-between" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:.85rem;">
+      <span>${names[g] || g}</span>
+      <span><strong>${s.count}</strong> · <span style="color:var(--green);">${fmtEUR(s.value)}</span></span>
+    </div>`).join('');
+}
+
+function renderTopGainers() {
+  const wd = collection
+    .map(c => ({ c, d: priceDelta(c) }))
+    .filter(x => x.d && isFinite(x.d.pct) && Math.abs(x.d.pct) > 0.5)
+    .sort((a,b) => b.d.pct - a.d.pct)
+    .slice(0, 8);
+  if (!wd.length) {
+    $('topGainers').innerHTML = '<p class="hint">Noch keine Preisdaten. Nutze "Preise aktualisieren".</p>';
+    return;
+  }
+  $('topGainers').innerHTML = wd.map(({c, d}) => `
+    <div class="row-between" style="padding:8px 0;border-bottom:1px solid var(--border);gap:10px;">
+      <div style="min-width:0;flex:1;">
+        <div style="font-weight:700;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.name)}</div>
+        <div style="font-size:.7rem;color:var(--muted);">${escapeHtml((c.set||'—').slice(0,20))}</div>
+      </div>
+      <div style="text-align:right;white-space:nowrap;">
+        <div style="font-weight:800;color:var(--green);font-size:.85rem;">${fmtEUR(c.price)}</div>
+        <div style="font-size:.72rem;font-weight:800;color:${d.pct >= 0 ? 'var(--green)':'var(--red)'};">
+          ${d.pct >= 0 ? '▲':'▼'} ${Math.abs(d.pct).toFixed(1)}%
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ============================================================
+// BULK REFRESH
+// ============================================================
+$('refreshPricesBtn').onclick = async () => {
+  const cards = collection.filter(c => c.api && c.api !== 'manual' && c.name);
+  if (!cards.length) { toast('Keine Karten mit API', 'error'); return; }
+  if (!confirm(`${cards.length} Preise aktualisieren? Dauer: ~${Math.ceil(cards.length*1.2)}s`)) return;
+  const btn = $('refreshPricesBtn');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  const prog = $('refreshProgress'), fill = prog.querySelector('.fill');
+  const status = $('refreshStatus');
+  prog.classList.add('show'); status.style.display = 'block';
+
+  let upd = 0, fail = 0, errSeq = 0;
+  for (let i = 0; i < cards.length; i++) {
+    const c = cards[i];
+    status.textContent = `${i+1}/${cards.length}: ${c.name}`;
+    fill.style.width = `${((i+1)/cards.length)*100}%`;
+    try {
+      const np = await fetchCurrentPrice(c);
+      if (np != null) {
+        if (!Array.isArray(c.priceHistory)) c.priceHistory = [];
+        c.priceHistory.push({ t: new Date().toISOString(), p: np });
+        c.price = np;
+        upd++; errSeq = 0;
+      } else { fail++; errSeq++; }
+    } catch { fail++; errSeq++; }
+    await sleep(errSeq > 3 ? 2000 : (errSeq > 0 ? 800 : 350));
+  }
+  save();
+  status.textContent = `✅ ${upd} aktualisiert${fail ? `, ${fail} fehlgeschlagen` : ''}`;
+  setTimeout(() => { prog.classList.remove('show'); status.style.display = 'none'; fill.style.width = '0%'; }, 3500);
+  btn.disabled = false; btn.innerHTML = orig;
+  renderTopGainers(); renderRarityStats();
+  toast(`${upd} aktualisiert`, upd ? 'success' : 'error');
+};
+
+// ============================================================
+// CSV IMPORT
+// ============================================================
+$('csvPickBtn').onclick = e => { e.stopPropagation(); $('csvInput').click(); };
+$('csvInput').onchange = e => e.target.files[0] && parseCSVFile(e.target.files[0]);
+$('csvDrop').onclick = e => { if (e.target === $('csvDrop')) $('csvInput').click(); };
+$('csvSampleBtn').onclick = e => {
+  e.stopPropagation();
+  const s = [
+    'Name,Set,Number,Rarity,Condition,Language,Game,Price,Quantity,Notes',
+    'Black Lotus,Alpha,232,Rare,Near Mint,EN,mtg,12500.00,1,Iconic',
+    'Dark Magician,LOB,LOB-005,Ultra Rare,Excellent,DE,ygo,45.50,2,',
+    'Charizard,Base Set,4,Holo,Near Mint,EN,pkmn,280.00,1,First edition'
+  ].join('\n');
+  download(s, 'tcg-sample.csv', 'text/csv;charset=utf-8');
+  toast('Beispiel heruntergeladen', 'success');
+};
+
+function parseCSVFile(file) {
+  const r = new FileReader();
+  r.onerror = () => toast('Lesen fehlgeschlagen', 'error');
+  r.onload = ev => {
+    try {
+      const text = String(ev.target.result || '').replace(/^\uFEFF/, '');
+      const p = parseCSV(text);
+      if (!p.headers.length) throw new Error('Keine Kopfzeile');
+      if (!p.rows.length) throw new Error('Keine Zeilen');
+      csvData = p;
+      showCSVMapping();
+      toast(`${p.rows.length} Zeilen erkannt`, 'success');
+    } catch (e) { toast('CSV: ' + e.message, 'error'); }
+  };
+  r.readAsText(file, 'UTF-8');
+}
+
+function parseCSV(text) {
+  const first = text.split(/\r?\n/)[0] || '';
+  const cnt = { ',': (first.match(/,/g)||[]).length, ';': (first.match(/;/g)||[]).length, '\t': (first.match(/\t/g)||[]).length };
+  const delim = Object.keys(cnt).reduce((a,b) => cnt[a] >= cnt[b] ? a : b);
+  const rows = [];
+  let cur = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"' && text[i+1] === '"') { field += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else field += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === delim) { cur.push(field.trim()); field = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (field.length || cur.length) { cur.push(field.trim()); rows.push(cur); cur = []; field = ''; }
+        if (ch === '\r' && text[i+1] === '\n') i++;
+      } else field += ch;
+    }
+  }
+  if (field.length || cur.length) { cur.push(field.trim()); rows.push(cur); }
+  if (!rows.length) return { headers: [], rows: [], delimiter: delim };
+  const headers = rows.shift().map(h => h.trim().replace(/^"|"$/g,''));
+  const data = rows.map(r => {
+    const out = r.slice(0, headers.length);
+    while (out.length < headers.length) out.push('');
+    return out;
+  }).filter(r => r.some(c => c && c.length));
+  return { headers, rows: data, delimiter: delim };
+}
+
+const FIELDS = [
+  { key:'name', label:'Name *', aliases:['name','kartenname','card name','cardname','titel','title','karte'] },
+  { key:'set', label:'Set', aliases:['set','edition','set name','serie','expansion','pack'] },
+  { key:'number', label:'Nummer', aliases:['number','nummer','card number','collector number','#','no','no.'] },
+  { key:'rarity', label:'Rarität', aliases:['rarity','seltenheit','rarität'] },
+  { key:'condition', label:'Zustand', aliases:['condition','zustand','kondition','state'] },
+  { key:'lang', label:'Sprache', aliases:['language','sprache','lang'] },
+  { key:'game', label:'Spiel', aliases:['game','spiel','tcg'] },
+  { key:'price', label:'Preis €', aliases:['price','wert','value','preis','market value','market'] },
+  { key:'qty', label:'Anzahl', aliases:['quantity','qty','anzahl','count','menge','amount'] },
+  { key:'notes', label:'Notizen', aliases:['notes','notizen','memo','comment','bemerkung'] },
+  { key:'image', label:'Bild-URL', aliases:['image','img','bild','image url','url','photo'] }
+];
+
+function showCSVMapping() {
+  $('csvMappingWrap').style.display = 'block';
+  $('csvRowCount').textContent = csvData.rows.length;
+  $('csvDelim').textContent = csvData.delimiter === '\t' ? 'Tab' : csvData.delimiter;
+  $('csvColCount').textContent = csvData.headers.length;
+  const lower = csvData.headers.map(h => h.toLowerCase().trim());
+  csvMapping = {};
+  FIELDS.forEach(f => {
+    const idx = lower.findIndex(h => f.aliases.includes(h));
+    csvMapping[f.key] = idx;
+  });
+  $('csvMapGrid').innerHTML = FIELDS.map(f => `
+    <div class="fg" style="margin-bottom:8px;">
+      <label>${f.label}</label>
+      <select data-field="${f.key}">
+        <option value="-1">— nicht zugeordnet —</option>
+        ${csvData.headers.map((h, i) => `<option value="${i}" ${csvMapping[f.key] === i ? 'selected' : ''}>${escapeHtml(h)}</option>`).join('')}
+      </select>
+    </div>
+  `).join('');
+  $('csvMapGrid').querySelectorAll('select').forEach(sel => {
+    sel.onchange = () => {
+      csvMapping[sel.dataset.field] = parseInt(sel.value);
+      updateCSVPreview();
+    };
+  });
+  updateCSVPreview();
+}
+
+function updateCSVPreview() {
+  const mapped = FIELDS.filter(f => csvMapping[f.key] >= 0);
+  if (!mapped.length) { $('csvPreviewWrap').innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem;">Nichts zugeordnet</div>'; return; }
+  const preview = csvData.rows.slice(0, 8);
+  $('csvPreviewWrap').innerHTML = `<table class="csv-table">
+    <thead><tr>${mapped.map(f => `<th>${f.label}</th>`).join('')}</tr></thead>
+    <tbody>${preview.map(row => `<tr>${mapped.map(f => `<td>${escapeHtml(row[csvMapping[f.key]] || '')}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table>`;
+}
+
+$('csvCancelBtn').onclick = () => {
+  csvData = null;
+  $('csvMappingWrap').style.display = 'none';
+  $('csvInput').value = '';
+};
+
+$('csvImportBtn').onclick = async () => {
+  if (!csvData) return;
+  if (csvMapping.name < 0) { toast('Feld "Name" zuordnen!', 'error'); return; }
+  const btn = $('csvImportBtn');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Importiere...';
+  const prog = $('csvProgress'), fill = prog.querySelector('.fill');
+  prog.classList.add('show');
+
+  let imp = 0, skip = 0;
+  const now = new Date().toISOString();
+  const get = (row, key) => csvMapping[key] >= 0 ? String(row[csvMapping[key]] || '').trim() : '';
+
+  for (let i = 0; i < csvData.rows.length; i++) {
+    const row = csvData.rows[i];
+    fill.style.width = `${((i+1)/csvData.rows.length)*100}%`;
+    const name = get(row, 'name');
+    if (!name) { skip++; continue; }
+    const price = parsePrice(get(row, 'price'));
+    let qty = parseInt(get(row, 'qty'), 10) || 1;
+    if (qty < 1) qty = 1;
+
+    const rr = get(row, 'rarity').toLowerCase();
+    let rarity = 'Rare';
+    if (rr.includes('secret')) rarity = 'Secret Rare';
+    else if (rr.includes('ultra') || rr.includes('mythic')) rarity = 'Ultra Rare';
+    else if (rr.includes('holo') || rr.includes('foil')) rarity = 'Holo';
+    else if (rr.includes('uncommon')) rarity = 'Uncommon';
+    else if (rr.includes('common')) rarity = 'Common';
+    else if (rr.includes('promo')) rarity = 'Promo';
+
+    const cc = get(row, 'condition').toLowerCase();
+    let condition = 'Near Mint';
+    if (cc.includes('mint') && !cc.includes('near')) condition = 'Mint';
+    else if (cc.includes('excellent') || cc === 'ex') condition = 'Excellent';
+    else if (cc.includes('good') || cc === 'gd') condition = 'Good';
+    else if (cc.includes('played') || cc === 'pl' || cc.includes('poor') || cc === 'po') condition = 'Played';
+
+    const ll = get(row, 'lang').toUpperCase().slice(0, 2);
+    const lang = ['DE','EN','JP','FR','IT'].includes(ll) ? ll : 'EN';
+
+    const gg = get(row, 'game').toLowerCase();
+    let game = 'manual';
+    if (gg.includes('magic') || gg === 'mtg') game = 'mtg';
+    else if (gg.includes('yugi') || gg === 'ygo') game = 'ygo';
+    else if (gg.includes('pok') || gg === 'pkmn') game = 'pkmn';
+
+    collection.push({
+      id: Date.now() + Math.random().toString(36).slice(2,8) + i,
+      name, set: get(row, 'set'), number: get(row, 'number'),
+      rarity, condition, lang, game, price, qty,
+      notes: get(row, 'notes'),
+      image: get(row, 'image') || null,
+      added: now,
+      api: game === 'manual' ? null : game,
+      priceHistory: price > 0 ? [{ t: now, p: price }] : [],
+      isGraded: false
+    });
+    imp++;
+  }
+  save(); renderCollection();
+  setTimeout(() => { prog.classList.remove('show'); fill.style.width = '0%'; }, 1500);
+  $('csvMappingWrap').style.display = 'none';
+  csvData = null; $('csvInput').value = '';
+  btn.disabled = false; btn.innerHTML = orig;
+  toast(`✅ ${imp} importiert${skip ? `, ${skip} übersprungen` : ''}`, imp ? 'success' : 'error');
+};
+
+// ============================================================
+// CSV EXPORT
+// ============================================================
+function download(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+function csvEsc(v) {
+  const s = String(v == null ? '' : v);
+  return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+$('csvExportBtn').onclick = () => {
+  if (!collection.length) { toast('Sammlung leer', 'error'); return; }
+  const h = ['Name','Set','Number','Rarity','Condition','Language','Game','PSA_Grade','PSA_Cert','Price','Quantity','Total','Notes','Added'];
+  const rows = collection.map(c => [
+    c.name, c.set, c.number, c.rarity, c.condition, c.lang, c.game,
+    c.psaGrade || '', c.psaCert || '',
+    (c.price||0).toFixed(2), c.qty, ((c.price||0)*c.qty).toFixed(2),
+    c.notes, c.added
+  ].map(csvEsc).join(','));
+  download('\uFEFF' + [h.join(','), ...rows].join('\n'),
+    `tcg-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
+  toast('CSV exportiert ✓', 'success');
+};
+
+$('csvExportHistoryBtn').onclick = () => {
+  const rows = [];
+  collection.forEach(c => {
+    (c.priceHistory || []).forEach(h => {
+      rows.push([c.name, c.set, c.number, c.game, h.t.slice(0,10), h.p.toFixed(2)].map(csvEsc).join(','));
+    });
+  });
+  if (!rows.length) { toast('Keine Preishistorie', 'error'); return; }
+  download('\uFEFF' + ['Name,Set,Number,Game,Date,Price', ...rows].join('\n'),
+    `tcg-verlauf-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
+  toast(`${rows.length} Snapshots ✓`, 'success');
+};
+
+// ============================================================
+// JSON
+// ============================================================
+$('exportBtn').onclick = () => {
+  if (!collection.length) { toast('Sammlung leer', 'error'); return; }
+  download(JSON.stringify(collection, null, 2),
+    `tcg-backup-${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+  toast('Backup exportiert ✓', 'success');
+};
+$('importBtn').onclick = () => $('importInput').click();
+$('importInput').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('Format');
+      if (!confirm(`${data.length} Karten importieren?`)) return;
+      const ids = new Set(collection.map(c => c.id));
+      let n = 0;
+      data.forEach(c => {
+        if (!c || !c.name) return;
+        if (ids.has(c.id)) c.id = Date.now() + Math.random().toString(36).slice(2,8);
+        if (!Array.isArray(c.priceHistory)) c.priceHistory = c.price > 0 ? [{t:c.added||new Date().toISOString(),p:c.price}] : [];
+        if (!c.game) c.game = c.api || 'manual';
+        collection.push(c); n++;
+      });
+      save(); renderCollection();
+      toast(`${n} importiert ✓`, 'success');
+    } catch (err) { toast('Import: ' + err.message, 'error'); }
+  };
+  r.readAsText(f);
+  e.target.value = '';
+};
+$('clearAllBtn').onclick = () => {
+  if (!collection.length) return;
+  if (!confirm('Wirklich ALLE Karten löschen?')) return;
+  collection = []; save(); renderCollection();
+  toast('Geleert', 'success');
+};
+
+// ============================================================
+// API STATUS
+// ============================================================
+async function checkAPIStatus() {
+  const check = async (url, id, opts) => {
+    const el = $(id); if (!el) return;
+    try {
+      const res = await fetchT(url, 6000, opts);
+      el.className = 'status-dot ' + (res.ok || res.status === 400 || res.status === 404 ? 'ok' : (res.status === 500 ? 'bad' : 'warn'));
+    } catch { el.className = 'status-dot bad'; }
+  };
+  check('https://api.scryfall.com/cards/search?q=test', 'statusDotMtg');
+  check('https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=test', 'statusDotYgo');
+  check('https://api.pokemontcg.io/v2/cards?q=name:pikachu&pageSize=1', 'statusDotPkmn');
+  const psaTok = localStorage.getItem(PSA_KEY_STORAGE);
+  if (psaTok) {
+    check('https://api.psacard.com/publicapi/cert/GetByCertNumber/00000000', 'statusDotPsa',
+      { headers: { 'Authorization': 'bearer ' + psaTok } });
+  } else {
+    $('statusDotPsa').className = 'status-dot warn';
+  }
+}
+
+// ============================================================
+// CLEANUP
+// ============================================================
+window.addEventListener('beforeunload', () => { try { ocrWorker?.terminate(); } catch {} });
+
+// ============================================================
+// BOOT
+// ============================================================
+load();
+updateStats();
+renderCollection();
+renderTopGainers();
+setTimeout(checkAPIStatus, 500);
+</script>
+</body>
+</html>
